@@ -1,1 +1,1 @@
-# Exact Real Arithmetic with Automatic Differentiation
+# Accelerating  exact real computation with AD on intervals
