@@ -4,7 +4,7 @@ import os
 import numpy as np
 import subprocess
 from tabulate import tabulate
-
+    
 
 def cast_input(to_cast):
     return exact_real_program.ExactConstant(to_cast) if isinstance(to_cast, (int, float)) else to_cast
