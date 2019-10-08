@@ -1,4 +1,4 @@
-from typing import List, Callable
+from typing import List, Callable, Tuple
 from functools import reduce
 from copy import copy
 
@@ -60,9 +60,9 @@ class ExactRealProgram:
         other = cast_input(other)
         return ExactMul([self, other])
 
-    # def __truediv__(self, other: 'ExactRealProgram'):
-    #     other = cast_input(other)
-    #     return ExactDiv([self, other])
+    def __truediv__(self, other: 'ExactRealProgram'):
+        other = cast_input(other)
+        return ExactDiv([self, other])
 
     def __radd__(self, other: 'ExactRealProgram'):
         return cast_input(other) + self
@@ -73,8 +73,8 @@ class ExactRealProgram:
     def __rmul__(self, other: 'ExactRealProgram'):
         return cast_input(other) * self
 
-    # def __rtruediv__(self, other: 'ExactRealProgram'):
-    #     return cast_input(other) / self
+    def __rtruediv__(self, other: 'ExactRealProgram'):
+        return cast_input(other) / self
 
     def interval_bf_operation(self,
                               other: 'ExactRealProgram',
@@ -122,7 +122,7 @@ class ExactAdd(BinOp):
 
     def interval_bf_operation(self,
                               precision_of_result: int,
-                              ad: bool = False) -> ExactRealProgram:
+                              ad: bool = False):
         left, right = self.children
         context_down = bf.precision(precision_of_result) + bf.RoundTowardNegative
         context_up = bf.precision(precision_of_result) + bf.RoundTowardPositive
@@ -145,48 +145,122 @@ class ExactSub(BinOp):
 
     def interval_bf_operation(self,
                               precision_of_result: int,
-                              ad: bool = False) -> ExactRealProgram:
+                              ad: bool = False):
         left, right = self.children
         context_down = bf.precision(precision_of_result) + bf.RoundTowardNegative
         context_up = bf.precision(precision_of_result) + bf.RoundTowardPositive
-        self.lower = bf.sub(left.lower, right.lower, context_down)
-        self.upper = bf.sub(left.upper, right.upper, context_up)
+        self.lower = bf.sub(left.lower, right.upper, context_down)
+        self.upper = bf.sub(left.upper, right.lower, context_up)
+
+        if ad:
+            left, right = self.children
+
+            left.ad_lower_children.append((1.0, self))
+            right.ad_lower_children.append((-1.0, self))
+
+            left.ad_upper_children.append((1.0, self))
+            right.ad_upper_children.append((-1.0, self))
 
 
 class ExactMul(BinOp):
     operator_string = '*'
-    bf_operation = lambda self, l, precision: lambda x, y: bf.mul(x, y, precision)
 
     def interval_bf_operation(self,
                               precision_of_result: int,
                               ad: bool = False) -> ExactRealProgram:
         left, right = self.children
-        context_down = bf.precision(precision_of_result) + bf.RoundTowardNegative
-        context_up = bf.precision(precision_of_result) + bf.RoundTowardPositive
-        
-        # Note: super inefficient to compute all pairs, kaucher multiplication in future?
-        ll = bf.mul(left.lower, right.lower, context_down)
-        lu = bf.mul(left.lower, right.upper, context_up)
-        ul = bf.mul(left.upper, right.lower, context_down)
-        uu = bf.mul(left.upper, right.upper, context_up)
 
-        # Notes: Make a version that needs only log rather than linear comparisons. Think binary tree.
-        self.lower = reduce(lambda x, y: bf.min(x, y, context_down), [ll, lu, ul, uu])
-        self.upper = reduce(lambda x, y: bf.max(x, y, context_up), [ll, lu, ul, uu])
+        ll, lu, rl, ru = left.lower, left.upper, right.lower, right.upper
+        product = ExactMul.multiply(ll, lu, rl, ru, precision_of_result)
+        (self.lower, ll_contrib, lr_contrib), (self.upper, ul_contrib, ur_contrib) = product
 
         if ad:
             left, right = self.children
 
-            left.ad_lower_children.append((float(right.lower), self))
-            right.ad_lower_children.append((float(left.lower), self))
+            left.ad_lower_children.append((float(lr_contrib), self))
+            right.ad_lower_children.append((float(ll_contrib), self))
 
-            left.ad_upper_children.append((float(right.upper), self))
-            right.ad_upper_children.append((float(left.upper), self))
+            left.ad_upper_children.append((float(ur_contrib), self))
+            right.ad_upper_children.append((float(ul_contrib), self))
+
+    @staticmethod
+    def multiply(left_lower: bf.BigFloat,
+                 left_upper: bf.BigFloat,
+                 right_lower: bf.BigFloat,
+                 right_upper: bf.BigFloat,
+                 precision_of_result: int):
+        context_down = bf.precision(precision_of_result) + bf.RoundTowardNegative
+        context_up = bf.precision(precision_of_result) + bf.RoundTowardPositive
+
+        # Note: super inefficient to compute all pairs, kaucher multiplication in future?
+        ll_down = bf.mul(left_lower, right_lower, context_down), left_lower, right_lower
+        lu_down = bf.mul(left_lower, right_upper, context_down), left_lower, right_upper
+        ul_down = bf.mul(left_upper, right_lower, context_down), left_upper, right_lower
+        uu_down = bf.mul(left_upper, right_upper, context_down), left_upper, right_upper
+
+        ll_up = bf.mul(left_lower, right_lower, context_up), left_lower, right_lower
+        lu_up = bf.mul(left_lower, right_upper, context_up), left_lower, right_upper
+        ul_up = bf.mul(left_upper, right_lower, context_up), left_upper, right_lower
+        uu_up = bf.mul(left_upper, right_upper, context_up), left_upper, right_upper
+
+        lower_vals = min([ll_down, lu_down, ul_down, uu_down], key=lambda x: x[0])
+        upper_vals = max([ll_up, lu_up, ul_up, uu_up], key=lambda x: x[0])
+        return lower_vals, upper_vals
 
 
-# class ExactDiv(BinOp):
-#     operator_string = '/'
-#     bf_operation = lambda self, l, precision: lambda x, y: bf.div(x, y, precision)
+class ExactDiv(BinOp):
+    operator_string = '/'
+
+    def interval_bf_operation(self,
+                              precision_of_result: int,
+                              ad: bool = False) -> ExactRealProgram:
+        left, right = self.children
+
+        inv_lower, inv_upper = ExactDiv.invert(right.lower, right.upper, precision_of_result)
+        product = ExactMul.multiply(left.lower, left.upper, inv_lower, inv_upper, precision_of_result)
+        (self.lower, ll_contrib, lr_contrib), (self.upper, ul_contrib, ur_contrib) = product
+
+        if ad:
+            left, right = self.children
+
+            # Since the right passes through an inversion, it incurs -1/x^2 factor
+            left.ad_lower_children.append((float(lr_contrib), self))
+            right.ad_lower_children.append((-float(ll_contrib) / float(right.lower)**2, self))
+
+            left.ad_upper_children.append((float(ur_contrib), self))
+            right.ad_upper_children.append((-float(ul_contrib) / float(right.upper)**2, self))
+
+    @staticmethod
+    def invert(lower: bf.BigFloat, upper: bf.BigFloat, precision_of_result: int) -> ExactRealProgram:
+        context_down = bf.precision(precision_of_result) + bf.RoundTowardNegative
+        context_up = bf.precision(precision_of_result) + bf.RoundTowardPositive
+
+        # interval doesn't contain zero then invert and flip
+        if (lower > 0 and upper > 0) or (lower < 0 and upper < 0):
+            inv_lower = bf.div(1, upper, context_down)
+            inv_upper = bf.div(1, lower, context_up)
+
+        # [lower, 0] -> [-infty, 1 / y1]
+        elif lower < 0 and upper == 0:
+            inv_lower = bf.BigFloat('-inf')
+            inv_upper = bf.div(1, lower, context_up)
+
+        # [0, upper] -> [1 / y2, infty]
+        elif lower == 0 and upper > 0:
+            inv_lower = bf.div(1, upper, context_down)
+            inv_upper = bf.BigFloat('inf')
+
+        # If the interval includes 0 just give up and return [-infty, infty]
+        # Note: an alternative is to split up intervals, but that's too tricky for now
+        elif lower < 0 < upper:
+            inv_lower = bf.BigFloat('-inf')
+            inv_upper = bf.BigFloat('inf')
+
+        # Interval is probably such that lower is greater than upper
+        else:
+            raise ValueError("Input interval is invalid for division")
+
+        return inv_lower, inv_upper
 
 
 class ExactLeaf(ExactRealProgram):
