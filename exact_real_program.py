@@ -1,8 +1,10 @@
 from typing import List, Callable, Tuple
-from functools import reduce
-from copy import copy
 
+from copy import copy
+import numpy as np
 import bigfloat as bf
+from bigfloat import BigFloat
+
 from utils import cast_input
 
 
@@ -88,12 +90,12 @@ class ExactRealProgram:
         new_self.upper_grad = None
         return new_self
 
-    @property
-    @staticmethod
-    def bf_operation(self):
+    def evaluate(self, precision: int, ad: bool = False):
         raise NotImplementedError
 
-    def evaluate(self, precision):
+    def evaluate_at(self, precisions: List[int], ad: bool = False):
+        """ Evaluate the subtree with the precisions specified by 
+        the in-order traversal of the subtree rooted here. """
         raise NotImplementedError
 
 
@@ -184,10 +186,10 @@ class ExactMul(BinOp):
             right.ad_upper_children.append((float(ul_contrib), self))
 
     @staticmethod
-    def multiply(left_lower: bf.BigFloat,
-                 left_upper: bf.BigFloat,
-                 right_lower: bf.BigFloat,
-                 right_upper: bf.BigFloat,
+    def multiply(left_lower: BigFloat,
+                 left_upper: BigFloat,
+                 right_lower: BigFloat,
+                 right_upper: BigFloat,
                  precision_of_result: int):
         context_down = bf.precision(precision_of_result) + bf.RoundTowardNegative
         context_up = bf.precision(precision_of_result) + bf.RoundTowardPositive
@@ -231,7 +233,7 @@ class ExactDiv(BinOp):
             right.ad_upper_children.append((-float(ul_contrib) / float(right.upper)**2, self))
 
     @staticmethod
-    def invert(lower: bf.BigFloat, upper: bf.BigFloat, precision_of_result: int) -> ExactRealProgram:
+    def invert(lower: BigFloat, upper: BigFloat, precision_of_result: int) -> ExactRealProgram:
         context_down = bf.precision(precision_of_result) + bf.RoundTowardNegative
         context_up = bf.precision(precision_of_result) + bf.RoundTowardPositive
 
@@ -242,19 +244,19 @@ class ExactDiv(BinOp):
 
         # [lower, 0] -> [-infty, 1 / y1]
         elif lower < 0 and upper == 0:
-            inv_lower = bf.BigFloat('-inf')
+            inv_lower = BigFloat('-inf')
             inv_upper = bf.div(1, lower, context_up)
 
         # [0, upper] -> [1 / y2, infty]
         elif lower == 0 and upper > 0:
             inv_lower = bf.div(1, upper, context_down)
-            inv_upper = bf.BigFloat('inf')
+            inv_upper = BigFloat('inf')
 
         # If the interval includes 0 just give up and return [-infty, infty]
         # Note: an alternative is to split up intervals, but that's too tricky for now
         elif lower < 0 < upper:
-            inv_lower = bf.BigFloat('-inf')
-            inv_upper = bf.BigFloat('inf')
+            inv_lower = BigFloat('-inf')
+            inv_upper = BigFloat('inf')
 
         # Interval is probably such that lower is greater than upper
         else:
@@ -303,3 +305,76 @@ class ExactConstant(ExactLeaf):
 
     def evaluate(self, precision: int, ad: bool = False):
         pass
+
+
+class ExactVariable(ExactLeaf):
+
+    def __init__(self, var_lower: BigFloat, var_upper: BigFloat, lower=None, upper=None):
+        super(ExactVariable, self).__init__([], lower, upper)
+        self.var_lower = var_lower
+        self.var_upper = var_upper
+        self.cache: BigFloat = None
+        self.cached_precision: int = 0
+
+    def evaluate(self, precision_of_result: int, ad: bool = False):
+        # Randomly sample from the variable range with a prefix consistent with all previous queries
+        self.lower = self.variable_at_point(precision_of_result, bf.RoundTowardNegative)
+        self.upper = self.variable_at_point(precision_of_result, bf.RoundTowardPositive)
+
+    def sample(self):
+        """ Dump randomness cache to force a resampling in the future. """
+        self.cache = None
+        self.lower = None
+        self.upper = None
+
+    def variable_at_point(self, precision: int, round_mode: bf.Context) -> BigFloat:
+        """ Sample from the specified range, making a random choice at each bit"""
+        if self.cache is None:
+            # Make sure to get the exponent right.
+            context_down = bf.precision(1) + bf.RoundTowardNegative
+            context_up = bf.precision(1) + bf.RoundTowardPositive
+
+            # Be conservative to keep sample in bounds
+            lower_bits = bf.ceil(bf.log2(self.var_lower, context_up), context_up)
+            upper_bits = bf.floor(bf.log2(self.var_upper, context_down), context_down)
+
+            # Get a number of (exponent) bits of valid magnitude
+            self.cache_mantissa = "0b1"
+            self.cache_exponent = np.random.randint(lower_bits, upper_bits + 1)
+
+            self.cache = True
+            self.cached_precision = 1
+
+        if self.cached_precision >= precision:
+            res_context = bf.precision(precision) + round_mode
+            exp_context = bf.precision(1) + bf.RoundTowardZero
+            mantissa = BigFloat(int(self.cache_mantissa, 2), res_context)
+            exponent = bf.exp2(self.cache_exponent, exp_context)
+            result = bf.mul(mantissa, exponent, res_context)
+            return result
+
+        else:
+            mantissa, exponent = self.cache_mantissa, self.cache_exponent
+
+            # Add precision bit-by-bit
+            for i in range(precision - self.cached_precision):
+                bit_of_randomness = np.random.randint(2)
+
+                # Adding a mantissa bit scales up by two so shift exponent appropriately.
+                mantissa = mantissa + str(bit_of_randomness)
+                exponent = exponent - 1
+                num_mantissa_bits = len(mantissa) - 2
+
+                res_context = bf.precision(num_mantissa_bits) + round_mode
+                exp_context = bf.precision(1) + round_mode
+                result = bf.mul(BigFloat(int(mantissa, 2), res_context), bf.exp2(exponent, exp_context), res_context)
+
+                # If the result is too big, subtract 1 from the previous bits and continue
+                if self.var_upper < result:
+                    mantissa = bin(int(mantissa[:-1], 2) - 1) + str(bit_of_randomness)
+                    result = bf.mul(BigFloat(int(mantissa, 2), res_context), bf.exp2(exponent, exp_context), res_context)
+                assert self.var_lower <= result <= self.var_upper, "Couldn't sample in range. Is lower < upper?"
+
+            self.cache_mantissa, self.cache_exponent = mantissa, exponent
+            self.cache, self.cached_precision = True, precision
+        return BigFloat(result, bf.precision(precision) + round_mode)
