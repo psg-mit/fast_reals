@@ -327,54 +327,31 @@ class ExactVariable(ExactLeaf):
         self.lower = None
         self.upper = None
 
+    def binary_to_range(self, point: str) -> BigFloat:
+        """ Bring a point from [0, 1] to a given range. """
+        interval_width = self.var_upper - self.var_lower
+        bitwidth = len(point) - 2
+        full_prec_context = bf.precision(bitwidth) + bf.RoundTowardNegative
+
+        # Map to [0, 1]
+        value = bf.mul(int(point, 2), bf.exp2(-bitwidth, full_prec_context), full_prec_context)
+        rescaled = bf.add(bf.mul(value, interval_width, full_prec_context), self.var_lower, full_prec_context)
+        return rescaled
+
     def variable_at_point(self, precision: int, round_mode: bf.Context) -> BigFloat:
-        """ Sample from the specified range, making a random choice at each bit"""
+        assert 0 < precision, "Input precision must be positive. "
+
         if self.cache is None:
-            # Make sure to get the exponent right.
-            context_down = bf.precision(1) + bf.RoundTowardNegative
-            context_up = bf.precision(1) + bf.RoundTowardPositive
-
-            # Be conservative to keep sample in bounds
-            lower_bits = bf.ceil(bf.log2(self.var_lower, context_up), context_up)
-            upper_bits = bf.floor(bf.log2(self.var_upper, context_down), context_down)
-
-            # Get a number of (exponent) bits of valid magnitude
-            self.cache_mantissa = "0b1"
-            self.cache_exponent = np.random.randint(lower_bits, upper_bits + 1)
-
-            self.cache = True
+            self.cache = "0b" + str(np.random.randint(2))
             self.cached_precision = 1
 
         if self.cached_precision >= precision:
-            res_context = bf.precision(precision) + round_mode
-            exp_context = bf.precision(1) + bf.RoundTowardZero
-            mantissa = BigFloat(int(self.cache_mantissa, 2), res_context)
-            exponent = bf.exp2(self.cache_exponent, exp_context)
-            result = bf.mul(mantissa, exponent, res_context)
-            return result
+            return self.binary_to_range(self.cache)
 
         else:
-            mantissa, exponent = self.cache_mantissa, self.cache_exponent
-
             # Add precision bit-by-bit
             for i in range(precision - self.cached_precision):
                 bit_of_randomness = np.random.randint(2)
-
-                # Adding a mantissa bit scales up by two so shift exponent appropriately.
-                mantissa = mantissa + str(bit_of_randomness)
-                exponent = exponent - 1
-                num_mantissa_bits = len(mantissa) - 2
-
-                res_context = bf.precision(num_mantissa_bits) + round_mode
-                exp_context = bf.precision(1) + round_mode
-                result = bf.mul(BigFloat(int(mantissa, 2), res_context), bf.exp2(exponent, exp_context), res_context)
-
-                # If the result is too big, subtract 1 from the previous bits and continue
-                if self.var_upper < result:
-                    mantissa = bin(int(mantissa[:-1], 2) - 1) + str(bit_of_randomness)
-                    result = bf.mul(BigFloat(int(mantissa, 2), res_context), bf.exp2(exponent, exp_context), res_context)
-                assert self.var_lower <= result <= self.var_upper, "Couldn't sample in range. Is lower < upper?"
-
-            self.cache_mantissa, self.cache_exponent = mantissa, exponent
-            self.cache, self.cached_precision = True, precision
-        return BigFloat(result, bf.precision(precision) + round_mode)
+                self.cache += str(bit_of_randomness)
+            self.cached_precision = precision
+        return self.binary_to_range(self.cache)
