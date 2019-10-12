@@ -32,9 +32,12 @@ class ExactRealProgram:
 
     def grad(self) -> float:
         if self.lower_grad is None:
-            self.lower_grad = sum(weight * var.grad()[0] for weight, var in self.ad_lower_children)
+            self.lower_grad = sum(w1 * var.grad()[0] + w2 * var.grad()[1]
+                                  for (w1, w2), var in self.ad_lower_children)
+            # ind is an index that indicates what that value contributes to: 0 for lower, 1 for upper
         if self.upper_grad is None:
-            self.upper_grad = sum(weight * var.grad()[1] for weight, var in self.ad_upper_children)
+            self.upper_grad = sum(w1 * var.grad()[0] + w2 * var.grad()[1]
+                                  for (w1, w2), var in self.ad_upper_children)
         return self.lower_grad, self.upper_grad
 
     def apply(self, f: Callable):
@@ -134,11 +137,11 @@ class ExactAdd(BinOp):
         if ad:
             left, right = self.children
 
-            left.ad_lower_children.append((1.0, self))
-            right.ad_lower_children.append((1.0, self))
+            left.ad_lower_children.append(((1, 0), self))
+            right.ad_lower_children.append(((1, 0), self))
 
-            left.ad_upper_children.append((1.0, self))
-            right.ad_upper_children.append((1.0, self))
+            left.ad_upper_children.append(((0, 1), self))
+            right.ad_upper_children.append(((0, 1), self))
 
 
 class ExactSub(BinOp):
@@ -157,11 +160,11 @@ class ExactSub(BinOp):
         if ad:
             left, right = self.children
 
-            left.ad_lower_children.append((1.0, self))
-            right.ad_lower_children.append((-1.0, self))
+            left.ad_lower_children.append(((1,  0), self))
+            right.ad_lower_children.append(((0, -1), self))
 
-            left.ad_upper_children.append((1.0, self))
-            right.ad_upper_children.append((-1.0, self))
+            left.ad_upper_children.append(((0, 1), self))
+            right.ad_upper_children.append(((-1, 0), self))
 
 
 class ExactMul(BinOp):
@@ -174,16 +177,16 @@ class ExactMul(BinOp):
 
         ll, lu, rl, ru = left.lower, left.upper, right.lower, right.upper
         product = ExactMul.multiply(ll, lu, rl, ru, precision_of_result)
-        (self.lower, ll_contrib, lr_contrib), (self.upper, ul_contrib, ur_contrib) = product
+        self.lower, self.upper, ll_weights, lr_weights, ul_weights, ur_weights = product
 
         if ad:
             left, right = self.children
 
-            left.ad_lower_children.append((float(lr_contrib), self))
-            right.ad_lower_children.append((float(ll_contrib), self))
+            left.ad_lower_children.append((ll_weights, self))
+            right.ad_lower_children.append((lr_weights, self))
 
-            left.ad_upper_children.append((float(ur_contrib), self))
-            right.ad_upper_children.append((float(ul_contrib), self))
+            left.ad_upper_children.append((ul_weights, self))
+            right.ad_upper_children.append((ur_weights, self))
 
     @staticmethod
     def multiply(left_lower: BigFloat,
@@ -195,19 +198,42 @@ class ExactMul(BinOp):
         context_up = bf.precision(precision_of_result) + bf.RoundTowardPositive
 
         # Note: super inefficient to compute all pairs, kaucher multiplication in future?
-        ll_down = bf.mul(left_lower, right_lower, context_down), left_lower, right_lower
-        lu_down = bf.mul(left_lower, right_upper, context_down), left_lower, right_upper
-        ul_down = bf.mul(left_upper, right_lower, context_down), left_upper, right_lower
-        uu_down = bf.mul(left_upper, right_upper, context_down), left_upper, right_upper
+        ll_down = bf.mul(left_lower, right_lower, context_down), (left_lower, 0), (right_lower, 0)
+        lu_down = bf.mul(left_lower, right_upper, context_down), (left_lower, 0), (right_upper, 1)
+        ul_down = bf.mul(left_upper, right_lower, context_down), (left_upper, 1), (right_lower, 0)
+        uu_down = bf.mul(left_upper, right_upper, context_down), (left_upper, 1), (right_upper, 1)
 
-        ll_up = bf.mul(left_lower, right_lower, context_up), left_lower, right_lower
-        lu_up = bf.mul(left_lower, right_upper, context_up), left_lower, right_upper
-        ul_up = bf.mul(left_upper, right_lower, context_up), left_upper, right_lower
-        uu_up = bf.mul(left_upper, right_upper, context_up), left_upper, right_upper
+        ll_up = bf.mul(left_lower, right_lower, context_up), (left_lower, 0), (right_lower, 0)
+        lu_up = bf.mul(left_lower, right_upper, context_up), (left_lower, 0), (right_upper, 1)
+        ul_up = bf.mul(left_upper, right_lower, context_up), (left_upper, 1), (right_lower, 0)
+        uu_up = bf.mul(left_upper, right_upper, context_up), (left_upper, 1), (right_upper, 1)
 
-        lower_vals = min([ll_down, lu_down, ul_down, uu_down], key=lambda x: x[0])
-        upper_vals = max([ll_up, lu_up, ul_up, uu_up], key=lambda x: x[0])
-        return lower_vals, upper_vals
+        (lower_product, (ll, ll_ind), (lr, lr_ind)) = min([ll_down, lu_down, ul_down, uu_down], key=lambda x: x[0])
+        (upper_product, (ul, ul_ind), (ur, ur_ind)) = max([ll_up, lu_up, ul_up, uu_up], key=lambda x: x[0])
+
+        # Assign derivative weights based on partial derivatives in chain rule
+        llw, lrw, ulw, urw = [[0, 0], [0, 0], [0, 0], [0, 0]]
+        if ll_ind == 0:
+            llw[0] = lr
+        else:
+            ulw[0] = lr
+
+        if lr_ind == 0:
+            lrw[0] = ll
+        else:
+            urw[0] = ll
+
+        if ul_ind == 0:
+            llw[1] = ur
+        else:
+            ulw[1] = ur
+
+        if ur_ind == 0:
+            lrw[1] = ul
+        else:
+            urw[1] = ul
+
+        return lower_product, upper_product, llw, lrw, ulw, urw
 
 
 class ExactDiv(BinOp):
@@ -284,6 +310,15 @@ class ExactLeaf(ExactRealProgram):
 
     def evaluate_at(self, precisions: List[int], ad: bool = False):
         self.evaluate(precisions[0], ad)
+
+
+class ExactInterval(ExactLeaf):
+
+    def __init__(self, lower=None, upper=None):
+        super(ExactInterval, self).__init__([], lower, upper)
+
+    def evaluate(self, precision_of_result: int, ad: bool = False):
+        pass
 
 
 class GenericExactConstant(ExactLeaf):
