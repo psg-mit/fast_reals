@@ -5,7 +5,7 @@ import numpy as np
 import bigfloat as bf
 from bigfloat import BigFloat
 
-from utils import cast_input
+from utils import cast_input, dot
 
 
 class ExactRealProgram:
@@ -214,24 +214,24 @@ class ExactMul(BinOp):
         # Assign derivative weights based on partial derivatives in chain rule
         llw, lrw, ulw, urw = [[0, 0], [0, 0], [0, 0], [0, 0]]
         if ll_ind == 0:
-            llw[0] = lr
+            llw[0] = float(lr)
         else:
-            ulw[0] = lr
+            ulw[0] = float(lr)
 
         if lr_ind == 0:
-            lrw[0] = ll
+            lrw[0] = float(ll)
         else:
-            urw[0] = ll
+            urw[0] = float(ll)
 
         if ul_ind == 0:
-            llw[1] = ur
+            llw[1] = float(ur)
         else:
-            ulw[1] = ur
+            ulw[1] = float(ur)
 
         if ur_ind == 0:
-            lrw[1] = ul
+            lrw[1] = float(ul)
         else:
-            urw[1] = ul
+            urw[1] = float(ul)
 
         return lower_product, upper_product, llw, lrw, ulw, urw
 
@@ -244,51 +244,62 @@ class ExactDiv(BinOp):
                               ad: bool = False) -> ExactRealProgram:
         left, right = self.children
 
-        inv_lower, inv_upper = ExactDiv.invert(right.lower, right.upper, precision_of_result)
+        inv_lower, inv_upper, inv_lrw, inv_urw = ExactDiv.invert(right.lower, right.upper, precision_of_result)
+        print("inv lower and upper", inv_lower, inv_upper)
+        print("INV", inv_lrw, inv_urw)
         product = ExactMul.multiply(left.lower, left.upper, inv_lower, inv_upper, precision_of_result)
-        (self.lower, ll_contrib, lr_contrib), (self.upper, ul_contrib, ur_contrib) = product
+        self.lower, self.upper, llw, lrw, ulw, urw = product
+        print("MUL", llw, lrw, ulw, urw)
 
         if ad:
             left, right = self.children
 
             # Since the right passes through an inversion, it incurs -1/x^2 factor
-            left.ad_lower_children.append((float(lr_contrib), self))
-            right.ad_lower_children.append((-float(ll_contrib) / float(right.lower)**2, self))
+            left.ad_lower_children.append((llw, self))
+            right.ad_lower_children.append(([inv_lrw[0] * urw[0], inv_lrw[1] * urw[1]], self))
 
-            left.ad_upper_children.append((float(ur_contrib), self))
-            right.ad_upper_children.append((-float(ul_contrib) / float(right.upper)**2, self))
+            left.ad_upper_children.append((ulw, self))
+            right.ad_upper_children.append(([inv_urw[0] * lrw[0], inv_urw[1] * lrw[1]], self))
 
     @staticmethod
     def invert(lower: BigFloat, upper: BigFloat, precision_of_result: int) -> ExactRealProgram:
         context_down = bf.precision(precision_of_result) + bf.RoundTowardNegative
         context_up = bf.precision(precision_of_result) + bf.RoundTowardPositive
 
-        # interval doesn't contain zero then invert and flip
+        # interval doesn't contain zero then invert and flip [1 / y2, 1 / y1]
         if (lower > 0 and upper > 0) or (lower < 0 and upper < 0):
             inv_lower = bf.div(1, upper, context_down)
             inv_upper = bf.div(1, lower, context_up)
+            lw = [0, -float(inv_upper)**2]
+            uw = [-float(inv_lower)**2, 0]
 
         # [lower, 0] -> [-infty, 1 / y1]
         elif lower < 0 and upper == 0:
             inv_lower = BigFloat('-inf')
             inv_upper = bf.div(1, lower, context_up)
+            lw = [0, float('nan')]
+            uw = [-float(inv_lower)**2, 0]
 
         # [0, upper] -> [1 / y2, infty]
         elif lower == 0 and upper > 0:
             inv_lower = bf.div(1, upper, context_down)
             inv_upper = BigFloat('inf')
+            lw = [0, -float(inv_upper)**2]
+            uw = [float('nan'), 0]
 
         # If the interval includes 0 just give up and return [-infty, infty]
         # Note: an alternative is to split up intervals, but that's too tricky for now
         elif lower < 0 < upper:
             inv_lower = BigFloat('-inf')
             inv_upper = BigFloat('inf')
+            lw = [0, float('nan')]
+            uw = [float('nan'), 0]
 
         # Interval is probably such that lower is greater than upper
         else:
             raise ValueError("Input interval is invalid for division")
 
-        return inv_lower, inv_upper
+        return inv_lower, inv_upper, lw, uw
 
 
 class ExactLeaf(ExactRealProgram):

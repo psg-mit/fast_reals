@@ -108,5 +108,35 @@ class MulTest(unittest.TestCase):
         self.assertEqual(y.grad(), (-1, 0))
 
 
+class DivTest(unittest.TestCase):
+
+    def test_simple(self):
+        x, y = ExactInterval(4, 6), ExactInterval(1, 2)
+        program = x / y
+        program.lower_grad, program.upper_grad = 1, 1
+        program.evaluate(10, ad=True)
+        print(x.grad(), y.grad())
+        self.assertEqual(x.grad(), (0.5, 1))
+        self.assertEqual(y.grad(), (-6, -1))
+
+    def test_left(self):
+        x, y = ExactInterval(4, 6), ExactInterval(1, 2)
+        program = x / y
+        program.lower_grad, program.upper_grad = 1, 0
+        program.evaluate(10, ad=True)
+        print(x.grad(), y.grad())
+        self.assertEqual(x.grad(), (0.5, 0))
+        self.assertEqual(y.grad(), (0, -1))
+
+    def test_right(self):
+        x, y = ExactInterval(4, 6), ExactInterval(1, 2)
+        program = x / y
+        program.lower_grad, program.upper_grad = 0, 1
+        program.evaluate(10, ad=True)
+        print(x.grad(), y.grad())
+        self.assertEqual(x.grad(), (0, 1))
+        self.assertEqual(y.grad(), (-6, 0))
+
+
 if __name__ == '__main__':
     unittest.main()
