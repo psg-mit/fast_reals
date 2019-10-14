@@ -5,7 +5,7 @@ import numpy as np
 import bigfloat as bf
 from bigfloat import BigFloat
 
-from utils import cast_input, dot
+from utils import cast_input
 
 
 class ExactRealProgram:
@@ -245,11 +245,8 @@ class ExactDiv(BinOp):
         left, right = self.children
 
         inv_lower, inv_upper, inv_lrw, inv_urw = ExactDiv.invert(right.lower, right.upper, precision_of_result)
-        print("inv lower and upper", inv_lower, inv_upper)
-        print("INV", inv_lrw, inv_urw)
         product = ExactMul.multiply(left.lower, left.upper, inv_lower, inv_upper, precision_of_result)
         self.lower, self.upper, llw, lrw, ulw, urw = product
-        print("MUL", llw, lrw, ulw, urw)
 
         if ad:
             left, right = self.children

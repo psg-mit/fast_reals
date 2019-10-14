@@ -22,6 +22,7 @@ def evaluate(program: ExactRealProgram,
         program.evaluate(precision, ad)
         error = program.upper - program.lower
         refinement_steps += 1
+    program.apply(reset_ad_children)
     return refinement_steps
 
 
@@ -43,12 +44,12 @@ def evaluate_using_derivatives(program: ExactRealProgram,
     while error > precision_bound:
         grads = []
         program.apply(lambda program: grads.append(program.grad()))
-        # TODO precision updates
         precisions = precision_from_grads(program, precisions, grads)
         program.apply(reset_ad_children)
         program.evaluate_at(precisions, ad=True)
         error = program.upper - program.lower
         refinement_steps += 1
+    program.apply(reset_ad_children)
     return refinement_steps
 
 

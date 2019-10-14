@@ -1,4 +1,4 @@
-from typing import Iterable, Callable
+from typing import Iterable, Callable, List
 
 from exact_real_program import ExactVariable, ExactConstant
 import benchmark_functions
@@ -11,8 +11,8 @@ class Benchmark:
                  distributions: Iterable,
                  constants: Iterable[float],
                  benchmark: Callable):
-        self.variables = [ExactVariable(*d) for d in distributions]
-        self.constants = [ExactConstant(c) for c in constants]
+        self.variables: List[ExactVariable] = [ExactVariable(*d) for d in distributions]
+        self.constants: List[ExactConstant] = [ExactConstant(c) for c in constants]
         self.benchmark_function = benchmark
 
     def benchmark(self):
