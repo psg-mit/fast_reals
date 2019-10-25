@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Set
 
 from exact_real_program import ExactRealProgram
 
@@ -10,19 +10,18 @@ def evaluate(program: ExactRealProgram,
     """ Uniformly refine the program until the given precision bound is met. """
     precision = initial_precision
     if ad:
-        program.lower_grad, program.upper_grad = 1, 1
+        program.lower_grad, program.upper_grad = 1, -1
     program.apply(reset_ad_children)
     program.evaluate(precision, ad)
 
     error = program.upper - program.lower
     refinement_steps = 0
     while error > precision_bound:
-        program.apply(reset_ad_children)
         precision += 3
+        program.apply(reset_ad_children)
         program.evaluate(precision, ad)
         error = program.upper - program.lower
         refinement_steps += 1
-    program.apply(reset_ad_children)
     return refinement_steps
 
 
@@ -35,7 +34,7 @@ def evaluate_using_derivatives(program: ExactRealProgram,
                                initial_precisions: List[int]) -> ExactRealProgram:
     """ Uniformly refine the program until the given precision bound is met. """
     precisions = initial_precisions
-    program.lower_grad, program.upper_grad = 1, 1
+    program.lower_grad, program.upper_grad = 1, -1
     program.apply(reset_ad_children)
     program.evaluate_at(precisions, ad=True)
 
@@ -54,10 +53,21 @@ def evaluate_using_derivatives(program: ExactRealProgram,
 
 
 def precision_from_grads(program: ExactRealProgram,
-                         prev_precisions: List[int],
+                         precisions: List[int],
                          grads: List[float]) -> List[int]:
+    critical_path = max_gradient(program, grads)
+    # Refine the largest precision by an extra step
+    return [prec + 6 if i in critical_path else prec + 3
+            for i, prec in enumerate(precisions)]
+
+
+def max_gradient(program: ExactRealProgram, grads: List[float]) -> Set[ExactRealProgram]:
     # Find the maximum gradient node in the computation graph
-    argmax = max([(sum(grad), i) for i, grad in enumerate(grads)], key=lambda x: x[0])[1]
+    # compute the (lower_grad - upper_grad), which should be positive
+    reversed_grads = list(reversed([(i + 1, grad[0] - grad[1]) for i, grad in enumerate(grads[1:])]))
+    argmax = max(reversed_grads, key=lambda x: x[1])[0]
+    # For debugging ad
+    # assert sum([(grad[0] - grad[1]) < 0 for grad in grads]) == 0  # All False
 
     # Get the set of nodes on the path from the maximum gradient node to the root
     nodes = []
@@ -69,7 +79,6 @@ def precision_from_grads(program: ExactRealProgram,
     node = max_gradient_node
     while node is not None:
         critical_path.add(node_to_ind[node])
+        node.color = 'red'
         node = node.parent
-
-    # Refine the largest precision by an extra step
-    return [prev_prec + 6 if i in critical_path else prev_prec + 3 for i, prev_prec in enumerate(prev_precisions)]
+    return critical_path

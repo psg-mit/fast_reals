@@ -4,7 +4,16 @@ import os
 import numpy as np
 import subprocess
 from tabulate import tabulate
-    
+from datetime import timedelta
+from timeit import default_timer as timer
+
+
+def time_wrap(f, args):
+    """Apply the arguments to the function and return the time and result. """
+    start_time = timer()
+    res = f(*args)
+    end_time = timer()
+    return timedelta(seconds=end_time - start_time), res
 
 def cast_input(to_cast):
     return exact_real_program.ExactConstant(to_cast) if isinstance(to_cast, (int, float)) else to_cast

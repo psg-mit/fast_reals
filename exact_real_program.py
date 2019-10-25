@@ -4,6 +4,7 @@ from copy import copy
 import numpy as np
 import bigfloat as bf
 from bigfloat import BigFloat
+from termcolor import colored
 
 from utils import cast_input
 
@@ -30,6 +31,9 @@ class ExactRealProgram:
         self.lower_grad = None
         self.upper_grad = None
 
+        # For pretty printing on critical_path
+        self.color = 'blue'
+
     def grad(self) -> float:
         if self.lower_grad is None:
             self.lower_grad = sum(w1 * var.grad()[0] + w2 * var.grad()[1]
@@ -46,6 +50,14 @@ class ExactRealProgram:
 
     def print(self):
         print([self.lower, self.upper])
+
+    def full_string(self, level=0):
+        value = str([round(float(self.lower), 2), round(float(self.upper), 2)])
+        derivatives = str([round(self.lower_grad, 2), round(self.upper_grad, 2)])
+        ret = "\t"*level + self.operator_string + value + derivatives + "\n"
+        for child in self.children:
+            ret += child.full_string(level+1)
+        return colored(ret, self.color)
 
     def __str__(self, level=0):
         ret = "\t" * level + self.operator_string + "\n"
@@ -97,7 +109,7 @@ class ExactRealProgram:
         raise NotImplementedError
 
     def evaluate_at(self, precisions: List[int], ad: bool = False):
-        """ Evaluate the subtree with the precisions specified by 
+        """ Evaluate the subtree with the precisions specified by
         the in-order traversal of the subtree rooted here. """
         raise NotImplementedError
 
@@ -116,6 +128,15 @@ class BinOp(ExactRealProgram):
         left.evaluate_at(precisions[1: left_size + 1], ad)
         right.evaluate_at(precisions[left_size + 1:], ad)
         self.interval_bf_operation(precisions[0], ad)
+        # Set weight to zero which sets derivatives to 0 for constant intervals
+        if left.lower == left.upper:
+            left.ad_lower_children = [([0, 0], adlc[1]) for adlc in left.ad_lower_children]
+            left.ad_upper_children = [([0, 0], adlc[1]) for adlc in left.ad_upper_children]
+
+        # Set weight to zero which sets derivatives to 0 for constant intervals
+        if right.lower == right.upper:
+            right.ad_lower_children = [([0, 0], adlc[1]) for adlc in right.ad_lower_children]
+            right.ad_upper_children = [([0, 0], adlc[1]) for adlc in right.ad_upper_children]
 
     def subtree_size(self):
         left, right = self.children
@@ -232,7 +253,6 @@ class ExactMul(BinOp):
             lrw[1] = float(ul)
         else:
             urw[1] = float(ul)
-
         return lower_product, upper_product, llw, lrw, ulw, urw
 
 
@@ -253,10 +273,10 @@ class ExactDiv(BinOp):
 
             # Since the right passes through an inversion, it incurs -1/x^2 factor
             left.ad_lower_children.append((llw, self))
-            right.ad_lower_children.append(([inv_lrw[0] * urw[0], inv_lrw[1] * urw[1]], self))
+            right.ad_lower_children.append(([inv_lrw[1] * urw[0], inv_lrw[1] * urw[1]], self))
 
             left.ad_upper_children.append((ulw, self))
-            right.ad_upper_children.append(([inv_urw[0] * lrw[0], inv_urw[1] * lrw[1]], self))
+            right.ad_upper_children.append(([inv_urw[0] * lrw[0], inv_urw[0] * lrw[1]], self))
 
     @staticmethod
     def invert(lower: BigFloat, upper: BigFloat, precision_of_result: int) -> ExactRealProgram:
@@ -308,7 +328,12 @@ class ExactLeaf(ExactRealProgram):
         pass
 
     def __str__(self, level=0):
-        return "\t"*level + str([self.lower, self.upper]) + "\n"
+        print("\t"*level + str([self.lower, self.upper]) + "\n")
+
+    def full_string(self, level=0):
+        value = str([round(float(self.lower), 2), round(float(self.upper), 2)])
+        derivatives = str([round(self.lower_grad, 2), round(self.upper_grad, 2)])
+        return colored("\t"*level + value + derivatives + "\n", self.color)
 
     def apply(self, f: Callable):
         f(self)
@@ -322,7 +347,7 @@ class ExactLeaf(ExactRealProgram):
 
 class ExactInterval(ExactLeaf):
 
-    def __init__(self, lower=None, upper=None):
+    def __init__(self, lower, upper):
         super(ExactInterval, self).__init__([], lower, upper)
 
     def evaluate(self, precision_of_result: int, ad: bool = False):
@@ -344,10 +369,18 @@ class GenericExactConstant(ExactLeaf):
 
 class ExactConstant(ExactLeaf):
     def __init__(self, constant: float):
-        super(ExactConstant, self).__init__([], constant, constant)
+        context_down = bf.precision(53) + bf.RoundTowardNegative
+        context_up = bf.precision(53) + bf.RoundTowardPositive
+        super(ExactConstant, self).__init__([], BigFloat(constant, context_down), BigFloat(constant, context_up))
 
     def evaluate(self, precision: int, ad: bool = False):
         pass
+
+    def full_string(self, level=0):
+        # If it is exactly a constant, just display the value.
+        if self.lower == self.upper:
+            return colored("\t"*level + str(round(float(self.lower), 2)) + "\n", self.color)
+        return super().full_string(level)
 
 
 class ExactVariable(ExactLeaf):
@@ -370,8 +403,9 @@ class ExactVariable(ExactLeaf):
         self.lower = None
         self.upper = None
 
-    def binary_to_range(self, point: str) -> BigFloat:
+    def binary_to_range(self, point: str, precision) -> BigFloat:
         """ Bring a point from [0, 1] to a given range. """
+        point = point[:precision + 2]
         interval_width = self.var_upper - self.var_lower
         bitwidth = len(point) - 2
         full_prec_context = bf.precision(bitwidth) + bf.RoundTowardNegative
@@ -389,7 +423,7 @@ class ExactVariable(ExactLeaf):
             self.cached_precision = 1
 
         if self.cached_precision >= precision:
-            return self.binary_to_range(self.cache)
+            return self.binary_to_range(self.cache, precision)
 
         else:
             # Add precision bit-by-bit
@@ -397,4 +431,4 @@ class ExactVariable(ExactLeaf):
                 bit_of_randomness = np.random.randint(2)
                 self.cache += str(bit_of_randomness)
             self.cached_precision = precision
-        return self.binary_to_range(self.cache)
+        return self.binary_to_range(self.cache, precision)
