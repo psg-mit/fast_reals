@@ -25,8 +25,8 @@ def run_benchmarks(names: Iterable = None, filename: str = ''):
         benchmark = all_benchmarks[name]
         exact_program, variables = benchmark.benchmark(), benchmark.variables
         init_prec = 10
-        num_samples = 1
-        error_bounds: List[float] = [1e-300]#, 1e-25, 1e-20, 1e-15, 1e-10]
+        num_samples = 100
+        error_bounds: List[float] = [1e-12, 1e-10, 1e-7, 1e-5, 1e-3]
         step_counts, base_counts = [], []
         ad_times, base_times = [], []
         for error_bound in error_bounds:
@@ -38,14 +38,14 @@ def run_benchmarks(names: Iterable = None, filename: str = ''):
                 time, (no_ad_steps, iterations) = time_wrap(evaluate, [exact_program, error_bound, False, init_prec])
                 normal_steps.append(no_ad_steps)
                 normal_times.append(time)
-                # benchmark_iters.append(iterations)
+                benchmark_iters.append(iterations)
                 time, with_ad_step = time_wrap(evaluate_using_derivatives,
-                                                [exact_program, error_bound, [init_prec]*exact_program.subtree_size()])
+                                               [exact_program, error_bound, [init_prec]*exact_program.subtree_size()])
                 with_ad_steps.append(with_ad_step)
                 with_ad_times.append(time)
 
-                plt.plot([i for i in range(len(iterations))], [t.total_seconds() for t in iterations])
-                plt.show()
+                # plt.plot([i for i in range(len(iterations))], [t.total_seconds() for t in iterations])
+                # plt.show()
             base_counts.append(np.mean(normal_steps))
             step_counts.append(np.mean(with_ad_steps))
             base_times.append(np.mean(normal_times))
@@ -74,44 +74,45 @@ def run_benchmarks(names: Iterable = None, filename: str = ''):
 def load_results(f: str):
     with open(f, 'rb') as f:
         name_data, error_bounds = pickle.load(f)
+    fig, axs = plt.subplots(3, 5)
+    fig.suptitle('Log Derivative', fontsize=26)
     times, refinements = [], []
-    for name, data in name_data.items():
+    for k, (name, data) in enumerate(name_data.items()):
         # if name != "verlhulst":
-        base_counts, ad_counts = data["refinements"]
-        base_times, ad_times = data["times"]
+        base_counts, ad_counts = data['refinements']
+        base_times, ad_times = data['times']
         base_seconds = [time.total_seconds() for time in base_times]
         ad_seconds = [time.total_seconds() for time in ad_times]
+        i, j = k % 3, k % 5
+        # axs[i, j].plot(np.log(error_bounds), base_seconds, 'b--')
+        # axs[i, j].plot(np.log(error_bounds), ad_seconds, 'r')
+        # axs[i, j].legend(('Base', 'With derivatives'), loc='upper right')
+        # axs[i, j].set()
+        # axs[i, j].set_title(name, fontsize=18)
+        # axs[i, j].set(xlabel='Error Bound', ylabel='Time')
 
-        # plt.plot(np.log(error_bounds), base_seconds, 'b--')
-        # plt.plot(np.log(error_bounds), ad_seconds, 'r')
-        # plt.legend(('Base', 'With derivatives'), loc='upper right')
-        # plt.xlabel('Error Bound', fontsize=14)
-        # plt.ylabel('Time', fontsize=14)
-        # plt.title(name)
-        # plt.show()
+        axs[i, j].plot(np.log(error_bounds), base_counts, 'b--')
+        axs[i, j].plot(np.log(error_bounds), ad_counts, 'r')
+        axs[i, j].legend(('Base', 'With derivatives'), loc='upper right')
+        axs[i, j].set(xlabel='Error Bound', ylabel='Refinement Steps')
+        axs[i, j].set_title(name, fontsize=18)
 
-        # plt.plot(np.log(error_bounds), base_counts, 'b--')
-        # plt.plot(np.log(error_bounds), ad_counts, 'r')
-        # plt.legend(('Base', 'With derivatives'), loc='upper right')
-        # plt.xlabel('Error Bound', fontsize=14)
-        # plt.ylabel('Refinement Steps', fontsize=14)
-        # plt.title(name)
-        # plt.show()
+        # times.append(np.mean([(bas - ads) / bas * 100 for bas, ads in zip(base_seconds, ad_seconds)]))
+        # refinements.append(np.mean([(bas - ads) / bas * 100 for bas, ads in zip(base_counts, ad_counts)]))
+    plt.show()
 
-        times.append(np.mean([(bas - ads) / bas * 100 for bas, ads in zip(base_seconds, ad_seconds)]))
-        refinements.append(np.mean([(bas - ads) / bas * 100 for bas, ads in zip(base_counts, ad_counts)]))
-    print("time", round(np.mean(times), 2))
-    print("refinements", round(np.mean(refinements), 2))
+    # print("time", round(np.mean(times), 2))
+    # print("refinements", round(np.mean(refinements), 2))
 
 
 if __name__ == '__main__':
     np.random.seed(0)
-    filename = "results/init10_samples100_logsqr_deriv"
+    filename = "results/good_bounds_init10_samples100_logderiv"
     # outfile = "test"
     # run_benchmarks(None)
-    filename = run_benchmarks(None)#, filename)
-    # if filename:
-        # load_results(filename + ".pkl")
+    # filename = run_benchmarks(None, filename)
+    if filename:
+        load_results(filename + ".pkl")
 
     # # Tests for ExactVariable
     # bits = 10

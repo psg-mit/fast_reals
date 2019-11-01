@@ -79,7 +79,7 @@ def max_gradient(program: ExactRealProgram, grads: List[float]) -> Set[ExactReal
 
     # Find the maximum gradient node in the computation graph
     # compute the (lower_grad - upper_grad), which should be positive
-    reversed_grads = list(reversed([(i + 1, (grad[0] - grad[1]) * widths[i + 1]**2) for i, grad in enumerate(grads[1:])]))
+    reversed_grads = list(reversed([(i + 1, (grad[0] - grad[1]) * widths[i + 1]) for i, grad in enumerate(grads[1:])]))
     argmax = max(reversed_grads, key=lambda x: x[1])[0]
     # For debugging ad
     # assert sum([(grad[0] - grad[1]) < 0 for grad in grads]) == 0  # All False
@@ -97,7 +97,7 @@ def max_gradient(program: ExactRealProgram, grads: List[float]) -> Set[ExactReal
     return critical_path
 
 
-def refinesiveness(program: ExactRealProgram, grads: List[float],
+def clamped_prop(program: ExactRealProgram, grads: List[float],
                    critical_paths: List[frozenset]) -> Set[ExactRealProgram]:
     # Find the maximum gradient node in the computation graph
     # compute the (lower_grad - upper_grad), which should be positive
