@@ -17,7 +17,7 @@ def run_benchmarks(names: Iterable = None, filename: str = ''):
     """Run given Iterable of benchmark names if None, run all benchmarks. """
     if names is None:
         names = all_benchmarks.keys()
-        print(names)
+        print(list(names))
 
     name_data = {}
     for name in names:
@@ -51,7 +51,7 @@ def run_benchmarks(names: Iterable = None, filename: str = ''):
             base_times.append(np.mean(normal_times))
             ad_times.append(np.mean(with_ad_times))
         name_data[name] = {"refinements": (base_counts, step_counts), "times": (base_times, ad_times)}
-        print(exact_program.full_string())
+        # print(exact_program.full_string())
 
     if filename:
         # Prevent overwriting
@@ -68,7 +68,7 @@ def run_benchmarks(names: Iterable = None, filename: str = ''):
             pickle.dump((name_data, error_bounds), f)
 
         print('Wrote file', filename, '\n')
-    return filename
+    return filename[:-4]
 
 
 def load_results(f: str):
@@ -84,18 +84,17 @@ def load_results(f: str):
         base_seconds = [time.total_seconds() for time in base_times]
         ad_seconds = [time.total_seconds() for time in ad_times]
         i, j = k % 3, k % 5
-        # axs[i, j].plot(np.log(error_bounds), base_seconds, 'b--')
-        # axs[i, j].plot(np.log(error_bounds), ad_seconds, 'r')
-        # axs[i, j].legend(('Base', 'With derivatives'), loc='upper right')
-        # axs[i, j].set()
-        # axs[i, j].set_title(name, fontsize=18)
-        # axs[i, j].set(xlabel='Error Bound', ylabel='Time')
-
-        axs[i, j].plot(np.log(error_bounds), base_counts, 'b--')
-        axs[i, j].plot(np.log(error_bounds), ad_counts, 'r')
+        axs[i, j].plot(np.log(error_bounds), base_seconds, 'b--')
+        axs[i, j].plot(np.log(error_bounds), ad_seconds, 'r')
         axs[i, j].legend(('Base', 'With derivatives'), loc='upper right')
-        axs[i, j].set(xlabel='Error Bound', ylabel='Refinement Steps')
         axs[i, j].set_title(name, fontsize=18)
+        axs[i, j].set(xlabel='Error Bound', ylabel='Time')
+
+        # axs[i, j].plot(np.log(error_bounds), base_counts, 'b--')
+        # axs[i, j].plot(np.log(error_bounds), ad_counts, 'r')
+        # axs[i, j].legend(('Base', 'With derivatives'), loc='upper right')
+        # axs[i, j].set(xlabel='Error Bound', ylabel='Refinement Steps')
+        # axs[i, j].set_title(name, fontsize=18)
 
         # times.append(np.mean([(bas - ads) / bas * 100 for bas, ads in zip(base_seconds, ad_seconds)]))
         # refinements.append(np.mean([(bas - ads) / bas * 100 for bas, ads in zip(base_counts, ad_counts)]))
@@ -106,14 +105,14 @@ def load_results(f: str):
 
 
 if __name__ == '__main__':
-    np.random.seed(0)
-    filename = "results/good_bounds_init10_samples100_logderiv"
+    np.random.seed(10)
+    filename = "results/logderiv_grad_descent_mean6_baseline6"
     # outfile = "test"
-    # run_benchmarks(None)
     # filename = run_benchmarks(None, filename)
+    # filename = run_benchmarks(['verlhulst', 'doppler1', 'doppler2', 'doppler3', 'predator prey', 'rigidbody1', 'rigidbody2', 'sine'], filename)
     if filename:
         load_results(filename + ".pkl")
-
+        # load_results(filename)
     # # Tests for ExactVariable
     # bits = 10
     # a = ExactVariable(1, 3)

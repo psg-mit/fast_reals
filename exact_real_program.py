@@ -53,7 +53,8 @@ class ExactRealProgram:
 
     def full_string(self, level=0):
         value = str([round(float(self.lower), 2), round(float(self.upper), 2)])
-        derivatives = str([round(self.lower_grad, 2), round(self.upper_grad, 2)])
+        # derivatives = str([round(self.lower_grad, 2), round(self.upper_grad, 2)])
+        derivatives = ' ' + str(self.sensitivity)
         ret = "\t"*level + self.operator_string + value + derivatives + "\n"
         for child in self.children:
             ret += child.full_string(level+1)
@@ -332,7 +333,8 @@ class ExactLeaf(ExactRealProgram):
 
     def full_string(self, level=0):
         value = str([round(float(self.lower), 2), round(float(self.upper), 2)])
-        derivatives = str([round(self.lower_grad, 2), round(self.upper_grad, 2)])
+        # derivatives = str([round(self.lower_grad, 2), round(self.upper_grad, 2)])
+        derivatives = ' ' + str(self.sensitivity)
         return colored("\t"*level + value + derivatives + "\n", self.color)
 
     def apply(self, f: Callable):

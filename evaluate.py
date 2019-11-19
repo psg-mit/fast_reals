@@ -1,4 +1,6 @@
 from typing import List, Set
+import math
+import matplotlib.pyplot as plt
 
 from exact_real_program import ExactRealProgram
 
@@ -21,8 +23,9 @@ def evaluate(program: ExactRealProgram,
     from datetime import timedelta
     from timeit import default_timer as timer
     while error > precision_bound:
+        # print(precision)
         start_time = timer()
-        precision += 3
+        precision += 6
         program.apply(reset_ad_children)
         program.evaluate(precision, ad)
         error = program.upper - program.lower
@@ -45,18 +48,23 @@ def evaluate_using_derivatives(program: ExactRealProgram,
     program.apply(reset_ad_children)
     program.evaluate_at(precisions, ad=True)
 
+    # Initialize the momentum
+    nodes = []
+    program.apply(lambda node: nodes.append(node))
+    widths = [float(node.upper) - float(node.lower) for node in nodes]
+    grads = []
+    program.apply(lambda program: grads.append(program.grad()))
+    momentum = 6 * len(grads) / sum([widths[i] * (grad[0] - grad[1]) for i, grad in enumerate(grads)])
+
     error = program.upper - program.lower
-    prev_error = error
-    critical_path = set()
     refinement_steps = 0
     while error > precision_bound:
-        grads = []
-        program.apply(lambda program: grads.append(program.grad()))
-        precisions, critical_path = precision_from_grads(program, precisions, grads, critical_path)
+        precisions, momentum = precision_from_grads(program, precisions, grads, momentum)
         program.apply(reset_ad_children)
         program.evaluate_at(precisions, ad=True)
-        prev_error = error
         error = program.upper - program.lower
+        grads = []
+        program.apply(lambda program: grads.append(program.grad()))
         refinement_steps += 1
     program.apply(reset_ad_children)
     return refinement_steps
@@ -65,11 +73,17 @@ def evaluate_using_derivatives(program: ExactRealProgram,
 def precision_from_grads(program: ExactRealProgram,
                          prev_precisions: List[int],
                          grads: List[float],
-                         critical_paths) -> List[int]:
-    critical_path = max_gradient(program, grads)
+                         prev_momentum: float) -> List[int]:
+    # critical_path = max_gradient(program, grads)
+    derivatives = max_gradient(program, grads)
     # Refine the largest precision by an extra step
-    return [prec + 6 if i in critical_path else prec + 3
-            for i, prec in enumerate(prev_precisions)], critical_path
+    # return [prec + 6 if i in critical_path else prec + 3
+            # for i, prec in enumerate(prev_precisions)], critical_path
+    precisions = [prec + round(prev_momentum * derivatives[i]) for i, prec in enumerate(prev_precisions)]
+    # print(precisions)
+    # m' = m * 0.5 + desired_mean / mean(derivs) * 0.5
+    momentum = prev_momentum * 0.5 + 6 * len(derivatives) / sum(derivatives) * 0.5
+    return precisions, momentum
 
 
 def max_gradient(program: ExactRealProgram, grads: List[float]) -> Set[ExactRealProgram]:
@@ -79,23 +93,34 @@ def max_gradient(program: ExactRealProgram, grads: List[float]) -> Set[ExactReal
 
     # Find the maximum gradient node in the computation graph
     # compute the (lower_grad - upper_grad), which should be positive
-    reversed_grads = list(reversed([(i + 1, (grad[0] - grad[1]) * widths[i + 1]) for i, grad in enumerate(grads[1:])]))
-    argmax = max(reversed_grads, key=lambda x: x[1])[0]
+    # reversed_grads = list(reversed([(i + 1, (grad[0] - grad[1]) * widths[i + 1]) for i, grad in enumerate(grads[1:])]))
+    # argmax = max(reversed_grads, key=lambda x: x[1])[0]
     # For debugging ad
     # assert sum([(grad[0] - grad[1]) < 0 for grad in grads]) == 0  # All False
 
     # Get the set of nodes on the path from the maximum gradient node to the root
-    max_gradient_node = nodes[argmax]
+    # max_gradient_node = nodes[argmax]
 
-    critical_path = set()
-    node_to_ind = {node: i for i, node in enumerate(nodes)}
-    node = max_gradient_node
-    while node is not None:
-        critical_path.add(node_to_ind[node])
-        node.color = 'red'
-        node = node.parent
-    return critical_path
+    # critical_path = set()
+    # node_to_ind = {node: i for i, node in enumerate(nodes)}
+    # node = max_gradient_node
+    # while node is not None:
+    #     critical_path.add(node_to_ind[node])
+    #     node.color = 'red'
+    #     node = node.parent
 
+    # for i, node in enumerate(nodes):
+    #     node.sensitivity = widths[i] * (grads[i][0] - grads[i][1])
+    # print(program.full_string())
+    # print(widths)
+    # for node in nodes:
+    #     node.color = 'blue'
+    # import ipdb; ipdb.set_trace()
+    # return critical_path
+    grads = [widths[i] * (grad[0] - grad[1]) for i, grad in enumerate(grads)]
+    # plt.hist(grads, bins=20)
+    # plt.show()
+    return grads
 
 def clamped_prop(program: ExactRealProgram, grads: List[float],
                    critical_paths: List[frozenset]) -> Set[ExactRealProgram]:
