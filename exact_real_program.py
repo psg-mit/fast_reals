@@ -1,15 +1,16 @@
-from typing import List, Callable, Tuple
-
+from typing import List, Callable
 from copy import copy
 import numpy as np
 import bigfloat as bf
 from bigfloat import BigFloat
 from termcolor import colored
 
+from time_ops import Time
 from utils import cast_input
 
 
 class ExactRealProgram:
+    time: Time = Time()
 
     def __init__(self, children: List, lower=None, upper=None):
         super(ExactRealProgram, self).__init__()
@@ -30,18 +31,25 @@ class ExactRealProgram:
         self.ad_upper_children = []
         self.lower_grad = None
         self.upper_grad = None
+        self.grad_precision = 1000
 
         # For pretty printing on critical_path
         self.color = 'blue'
 
+    def _compute_grad(self, children: List) -> bf.BigFloat:
+        context = bf.precision(self.grad_precision) + bf.RoundAwayFromZero
+        grad = 0
+        for (w1, w2), var in children:
+            lower, upper = var.grad()
+            grad_term = bf.add(bf.mul(w1, lower, context), bf.mul(w2, upper, context), context)
+            grad = bf.add(grad_term, grad, context)
+        return grad
+
     def grad(self) -> float:
         if self.lower_grad is None:
-            self.lower_grad = sum(w1 * var.grad()[0] + w2 * var.grad()[1]
-                                  for (w1, w2), var in self.ad_lower_children)
-            # ind is an index that indicates what that value contributes to: 0 for lower, 1 for upper
+            self.lower_grad = self._compute_grad(self.ad_lower_children)
         if self.upper_grad is None:
-            self.upper_grad = sum(w1 * var.grad()[0] + w2 * var.grad()[1]
-                                  for (w1, w2), var in self.ad_upper_children)
+            self.upper_grad = self._compute_grad(self.ad_upper_children)
         return self.lower_grad, self.upper_grad
 
     def apply(self, f: Callable):
@@ -53,7 +61,7 @@ class ExactRealProgram:
 
     def full_string(self, level=0):
         value = str([round(float(self.lower), 2), round(float(self.upper), 2)])
-        derivatives = str([round(self.lower_grad, 2), round(self.upper_grad, 2)])
+        derivatives = str([self.lower_grad, self.upper_grad])
         ret = "\t"*level + self.operator_string + value + derivatives + "\n"
         for child in self.children:
             ret += child.full_string(level+1)
@@ -152,8 +160,8 @@ class ExactAdd(BinOp):
         left, right = self.children
         context_down = bf.precision(precision_of_result) + bf.RoundTowardNegative
         context_up = bf.precision(precision_of_result) + bf.RoundTowardPositive
-        self.lower = bf.add(left.lower, right.lower, context_down)
-        self.upper = bf.add(left.upper, right.upper, context_up)
+        self.lower = ExactRealProgram.time.add(left.lower, right.lower, context_down)
+        self.upper = ExactRealProgram.time.add(left.upper, right.upper, context_up)
 
         if ad:
             left, right = self.children
@@ -167,7 +175,6 @@ class ExactAdd(BinOp):
 
 class ExactSub(BinOp):
     operator_string = '-'
-    bf_operation = bf.sub
 
     def interval_bf_operation(self,
                               precision_of_result: int,
@@ -175,8 +182,8 @@ class ExactSub(BinOp):
         left, right = self.children
         context_down = bf.precision(precision_of_result) + bf.RoundTowardNegative
         context_up = bf.precision(precision_of_result) + bf.RoundTowardPositive
-        self.lower = bf.sub(left.lower, right.upper, context_down)
-        self.upper = bf.sub(left.upper, right.lower, context_up)
+        self.lower = ExactRealProgram.time.sub(left.lower, right.upper, context_down)
+        self.upper = ExactRealProgram.time.sub(left.upper, right.lower, context_up)
 
         if ad:
             left, right = self.children
@@ -219,15 +226,15 @@ class ExactMul(BinOp):
         context_up = bf.precision(precision_of_result) + bf.RoundTowardPositive
 
         # Note: super inefficient to compute all pairs, kaucher multiplication in future?
-        ll_down = bf.mul(left_lower, right_lower, context_down), (left_lower, 0), (right_lower, 0)
-        lu_down = bf.mul(left_lower, right_upper, context_down), (left_lower, 0), (right_upper, 1)
-        ul_down = bf.mul(left_upper, right_lower, context_down), (left_upper, 1), (right_lower, 0)
-        uu_down = bf.mul(left_upper, right_upper, context_down), (left_upper, 1), (right_upper, 1)
+        ll_down = ExactRealProgram.time.mul(left_lower, right_lower, context_down), (left_lower, 0), (right_lower, 0)
+        lu_down = ExactRealProgram.time.mul(left_lower, right_upper, context_down), (left_lower, 0), (right_upper, 1)
+        ul_down = ExactRealProgram.time.mul(left_upper, right_lower, context_down), (left_upper, 1), (right_lower, 0)
+        uu_down = ExactRealProgram.time.mul(left_upper, right_upper, context_down), (left_upper, 1), (right_upper, 1)
 
-        ll_up = bf.mul(left_lower, right_lower, context_up), (left_lower, 0), (right_lower, 0)
-        lu_up = bf.mul(left_lower, right_upper, context_up), (left_lower, 0), (right_upper, 1)
-        ul_up = bf.mul(left_upper, right_lower, context_up), (left_upper, 1), (right_lower, 0)
-        uu_up = bf.mul(left_upper, right_upper, context_up), (left_upper, 1), (right_upper, 1)
+        ll_up = ExactRealProgram.time.mul(left_lower, right_lower, context_up), (left_lower, 0), (right_lower, 0)
+        lu_up = ExactRealProgram.time.mul(left_lower, right_upper, context_up), (left_lower, 0), (right_upper, 1)
+        ul_up = ExactRealProgram.time.mul(left_upper, right_lower, context_up), (left_upper, 1), (right_lower, 0)
+        uu_up = ExactRealProgram.time.mul(left_upper, right_upper, context_up), (left_upper, 1), (right_upper, 1)
 
         (lower_product, (ll, ll_ind), (lr, lr_ind)) = min([ll_down, lu_down, ul_down, uu_down], key=lambda x: x[0])
         (upper_product, (ul, ul_ind), (ur, ur_ind)) = max([ll_up, lu_up, ul_up, uu_up], key=lambda x: x[0])
@@ -285,21 +292,21 @@ class ExactDiv(BinOp):
 
         # interval doesn't contain zero then invert and flip [1 / y2, 1 / y1]
         if (lower > 0 and upper > 0) or (lower < 0 and upper < 0):
-            inv_lower = bf.div(1, upper, context_down)
-            inv_upper = bf.div(1, lower, context_up)
+            inv_lower = ExactRealProgram.time.div(1, upper, context_down)
+            inv_upper = ExactRealProgram.time.div(1, lower, context_up)
             lw = [0, -float(inv_upper)**2]
             uw = [-float(inv_lower)**2, 0]
 
         # [lower, 0] -> [-infty, 1 / y1]
         elif lower < 0 and upper == 0:
             inv_lower = BigFloat('-inf')
-            inv_upper = bf.div(1, lower, context_up)
+            inv_upper = ExactRealProgram.time.div(1, lower, context_up)
             lw = [0, float('nan')]
             uw = [-float(inv_lower)**2, 0]
 
         # [0, upper] -> [1 / y2, infty]
         elif lower == 0 and upper > 0:
-            inv_lower = bf.div(1, upper, context_down)
+            inv_lower = ExactRealProgram.time.div(1, upper, context_down)
             inv_upper = BigFloat('inf')
             lw = [0, -float(inv_upper)**2]
             uw = [float('nan'), 0]
@@ -332,7 +339,7 @@ class ExactLeaf(ExactRealProgram):
 
     def full_string(self, level=0):
         value = str([round(float(self.lower), 2), round(float(self.upper), 2)])
-        derivatives = str([round(self.lower_grad, 2), round(self.upper_grad, 2)])
+        derivatives = str([self.lower_grad, self.upper_grad])
         return colored("\t"*level + value + derivatives + "\n", self.color)
 
     def apply(self, f: Callable):

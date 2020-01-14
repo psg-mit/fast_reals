@@ -19,15 +19,14 @@ int main()
     };
 
     // Add
-    int refinement_iterations = 17;
-    int precision = 3;
-    for (int i = 1; i < refinement_iterations; i++){
-
+    int refinement_iterations = 18;
+    for (int i = 3; i < refinement_iterations; i++){
+        int precision = pow(2, i);
         mpfr_init2(pi, precision);
         mpfr_init2(one, precision);
         mpfr_init2(e, precision);
         mpfr_init2(result, precision);
-        mpfr_free_cache ();
+        mpfr_free_cache();
 
         clock_t begin = clock();
         mpfr_const_pi(pi, GMP_RNDN);
@@ -41,21 +40,19 @@ int main()
         mpfr_clear(result);
 
         printf("%.2g sec at precision %d\n", convtime(begin, end), precision);
-        precision *= 2;
     }
 
 
     printf("\n***===***\n");
 
     // Sub
-    precision = 3;
-    for (int i = 1; i < refinement_iterations; i++){
-
+    for (int i = 3; i < refinement_iterations; i++){
+        int precision = pow(2, i);
         mpfr_init2(pi, precision);
         mpfr_init2(one, precision);
         mpfr_init2(e, precision);
         mpfr_init2(result, precision);
-        mpfr_free_cache ();
+        mpfr_free_cache();
 
         clock_t begin = clock();
         mpfr_const_pi(pi, GMP_RNDN);
@@ -69,19 +66,17 @@ int main()
         mpfr_clear(result);
 
         printf("%.2g sec at precision %d\n", convtime(begin, end), precision);
-        precision *= 2;
     }
     printf("\n***===***\n");
 
     // Mul
-    precision = 3;
-
-    for (int i = 1; i < refinement_iterations; i++){
+    for (int i = 3; i < refinement_iterations; i++){
+        int precision = pow(2, i);
         mpfr_init2(pi, precision);
         mpfr_init2(one, precision);
         mpfr_init2(e, precision);
         mpfr_init2(result, precision);
-        mpfr_free_cache ();
+        mpfr_free_cache();
 
         clock_t begin = clock();
         mpfr_const_pi(pi, GMP_RNDN);
@@ -95,20 +90,17 @@ int main()
         mpfr_clear(result);
 
         printf("%.2g sec at precision %d\n", convtime(begin, end), precision);
-        precision *= 2;
     }
-
     printf("\n***===***\n");
 
     // Div
-    precision = 3;
-    for (int i = 1; i < refinement_iterations; i++){
-
+    for (int i = 3; i < refinement_iterations; i++){
+        int precision = pow(2, i);
         mpfr_init2(pi, precision);
         mpfr_init2(one, precision);
         mpfr_init2(e, precision);
         mpfr_init2(result, precision);
-        mpfr_free_cache ();
+        mpfr_free_cache();
 
         clock_t begin = clock();
         mpfr_const_pi(pi, GMP_RNDN);
@@ -122,6 +114,5 @@ int main()
         mpfr_clear(result);
 
         printf("%.2g sec at precision %d\n", convtime(begin, end), precision);
-        precision *= 2;
     }
 }

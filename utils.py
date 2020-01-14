@@ -15,6 +15,7 @@ def time_wrap(f, args):
     end_time = timer()
     return timedelta(seconds=end_time - start_time), res
 
+
 def cast_input(to_cast):
     return exact_real_program.ExactConstant(to_cast) if isinstance(to_cast, (int, float)) else to_cast
 
@@ -37,4 +38,3 @@ def create_pdf_from_table(filename: str, table_info: np.array, headers: List):
     os.unlink(filename + ".tex")
     os.unlink(filename + ".log")
     os.unlink(filename + ".aux")
-

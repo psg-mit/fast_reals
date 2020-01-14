@@ -1,0 +1,66 @@
+1.7e-05 sec at precision 8
+3e-06 sec at precision 16
+2e-06 sec at precision 32
+4e-06 sec at precision 64
+2.1e-05 sec at precision 128
+1.3e-05 sec at precision 256
+1.1e-05 sec at precision 512
+1.6e-05 sec at precision 1024
+4.7e-05 sec at precision 2048
+7.1e-05 sec at precision 4096
+0.00024 sec at precision 8192
+0.0006 sec at precision 16384
+0.0019 sec at precision 32768
+0.0063 sec at precision 65536
+0.02 sec at precision 131072
+
+***===***
+1.2e-05 sec at precision 8
+3e-06 sec at precision 16
+2e-06 sec at precision 32
+8e-06 sec at precision 64
+1.2e-05 sec at precision 128
+1.4e-05 sec at precision 256
+1.4e-05 sec at precision 512
+1.7e-05 sec at precision 1024
+3.6e-05 sec at precision 2048
+8.3e-05 sec at precision 4096
+0.00019 sec at precision 8192
+0.00053 sec at precision 16384
+0.0017 sec at precision 32768
+0.0054 sec at precision 65536
+0.017 sec at precision 131072
+
+***===***
+4e-06 sec at precision 8
+2e-06 sec at precision 16
+2e-06 sec at precision 32
+3e-06 sec at precision 64
+7e-06 sec at precision 128
+8e-06 sec at precision 256
+1e-05 sec at precision 512
+1.4e-05 sec at precision 1024
+3e-05 sec at precision 2048
+6.1e-05 sec at precision 4096
+0.00017 sec at precision 8192
+0.00053 sec at precision 16384
+0.0018 sec at precision 32768
+0.0073 sec at precision 65536
+0.02 sec at precision 131072
+
+***===***
+5e-06 sec at precision 8
+1e-06 sec at precision 16
+2e-06 sec at precision 32
+3e-06 sec at precision 64
+7e-06 sec at precision 128
+7e-06 sec at precision 256
+9e-06 sec at precision 512
+1.3e-05 sec at precision 1024
+2.9e-05 sec at precision 2048
+5.8e-05 sec at precision 4096
+0.00017 sec at precision 8192
+0.00055 sec at precision 16384
+0.0017 sec at precision 32768
+0.0055 sec at precision 65536
+0.016 sec at precision 131072
