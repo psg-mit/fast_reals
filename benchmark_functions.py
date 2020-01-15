@@ -2,6 +2,11 @@
 from typing import List
 
 
+def simplest_test(params: List):
+    big_const, e, pi = params
+    return e + big_const * pi
+
+
 # var_T = IR.RealVE("T", 0, float(300.0)-float(0.01), float(300.0)+float(0.01))
 # var_a = IR.RealVE("a", 1, float(0.401)-float(1e-06), float(0.401)+float(1e-06))
 # var_b = IR.RealVE("b", 2, float(42.7e-06)-float(1e-10), float(42.7e-06)+float(1e-10))

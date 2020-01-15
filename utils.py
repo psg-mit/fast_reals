@@ -1,4 +1,4 @@
-from typing import List, Callable
+from typing import List
 import exact_real_program
 import os
 import numpy as np
@@ -14,6 +14,7 @@ def time_wrap(f, args):
     res = f(*args)
     end_time = timer()
     return timedelta(seconds=end_time - start_time), res
+
 
 def cast_input(to_cast):
     return exact_real_program.ExactConstant(to_cast) if isinstance(to_cast, (int, float)) else to_cast

@@ -1,4 +1,4 @@
-from typing import List, Callable, Tuple
+from typing import List, Callable
 
 from copy import copy
 import numpy as np
@@ -53,7 +53,10 @@ class ExactRealProgram:
 
     def full_string(self, level=0):
         value = str([round(float(self.lower), 2), round(float(self.upper), 2)])
-        derivatives = str([round(self.lower_grad, 2), round(self.upper_grad, 2)])
+        if self.lower_grad is not None and self.upper_grad is not None:
+            derivatives = str([round(self.lower_grad, 2), round(self.upper_grad, 2)])
+        else:
+            derivatives = "[None, None]"
         ret = "\t"*level + self.operator_string + value + derivatives + "\n"
         for child in self.children:
             ret += child.full_string(level+1)
@@ -233,7 +236,7 @@ class ExactMul(BinOp):
         (upper_product, (ul, ul_ind), (ur, ur_ind)) = max([ll_up, lu_up, ul_up, uu_up], key=lambda x: x[0])
 
         # Assign derivative weights based on partial derivatives in chain rule
-        llw, lrw, ulw, urw = [[0, 0], [0, 0], [0, 0], [0, 0]]
+        llw, lrw, ulw, urw = [[0., 0.], [0., 0.], [0., 0.], [0., 0.]]
         if ll_ind == 0:
             llw[0] = float(lr)
         else:
@@ -261,7 +264,7 @@ class ExactDiv(BinOp):
 
     def interval_bf_operation(self,
                               precision_of_result: int,
-                              ad: bool = False) -> ExactRealProgram:
+                              ad: bool = False):
         left, right = self.children
 
         inv_lower, inv_upper, inv_lrw, inv_urw = ExactDiv.invert(right.lower, right.upper, precision_of_result)
@@ -332,7 +335,10 @@ class ExactLeaf(ExactRealProgram):
 
     def full_string(self, level=0):
         value = str([round(float(self.lower), 2), round(float(self.upper), 2)])
-        derivatives = str([round(self.lower_grad, 2), round(self.upper_grad, 2)])
+        if self.lower_grad is not None and self.upper_grad is not None:
+            derivatives = str([round(self.lower_grad, 2), round(self.upper_grad, 2)])
+        else:
+            derivatives = "[None, None]"
         return colored("\t"*level + value + derivatives + "\n", self.color)
 
     def apply(self, f: Callable):
