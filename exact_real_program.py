@@ -26,6 +26,7 @@ class ExactRealProgram:
         self.upper_value = None
 
         # For computing ad
+        self.grad_precision = 100
         self.ad_lower_children = []
         self.ad_upper_children = []
         self.lower_grad = None
@@ -34,14 +35,29 @@ class ExactRealProgram:
         # For pretty printing on critical_path
         self.color = 'blue'
 
-    def grad(self) -> float:
+    # def grad(self) -> float:
+    #     if self.lower_grad is None:
+    #         self.lower_grad = sum(w1 * var.grad()[0] + w2 * var.grad()[1]
+    #                               for (w1, w2), var in self.ad_lower_children)
+    #         # ind is an index that indicates what that value contributes to: 0 for lower, 1 for upper
+    #     if self.upper_grad is None:
+    #         self.upper_grad = sum(w1 * var.grad()[0] + w2 * var.grad()[1]
+    #                               for (w1, w2), var in self.ad_upper_children)
+    #     return self.lower_grad, self.upper_grad
+    def _compute_grad(self, children: List) -> bf.BigFloat:
+        context = bf.precision(self.grad_precision) + bf.RoundAwayFromZero
+        grad = 0
+        for (w1, w2), var in children:
+            lower, upper = var.grad()
+            grad_term = bf.add(bf.mul(w1, lower, context), bf.mul(w2, upper, context), context)
+            grad = bf.add(grad_term, grad, context)
+        return grad
+
+    def grad(self):
         if self.lower_grad is None:
-            self.lower_grad = sum(w1 * var.grad()[0] + w2 * var.grad()[1]
-                                  for (w1, w2), var in self.ad_lower_children)
-            # ind is an index that indicates what that value contributes to: 0 for lower, 1 for upper
+            self.lower_grad = self._compute_grad(self.ad_lower_children)
         if self.upper_grad is None:
-            self.upper_grad = sum(w1 * var.grad()[0] + w2 * var.grad()[1]
-                                  for (w1, w2), var in self.ad_upper_children)
+            self.upper_grad = self._compute_grad(self.ad_upper_children)
         return self.lower_grad, self.upper_grad
 
     def apply(self, f: Callable):
@@ -54,7 +70,7 @@ class ExactRealProgram:
     def full_string(self, level=0):
         value = str([round(float(self.lower), 2), round(float(self.upper), 2)])
         if self.lower_grad is not None and self.upper_grad is not None:
-            derivatives = str([round(self.lower_grad, 2), round(self.upper_grad, 2)])
+            derivatives = str([round(float(self.lower_grad), 2), round(float(self.upper_grad), 2)])
         else:
             derivatives = "[None, None]"
         ret = "\t"*level + self.operator_string + value + derivatives + "\n"
@@ -322,6 +338,45 @@ class ExactDiv(BinOp):
         return inv_lower, inv_upper, lw, uw
 
 
+class UnaryOperator(ExactRealProgram):
+
+    def __init__(self, child, unary_op: Callable, unary_deriv: Callable):
+        super(UnaryOperator, self).__init__(children=[child])
+        self.child = child
+        self.unary_op = unary_op
+        self.unary_deriv = unary_deriv
+        self.operator_string = str(unary_op)
+
+    def evaluate(self, precison: int, ad: bool = False):
+        self.child.evaluate(precison, ad)
+        self.interval_bf_operation(precison, ad)
+
+    def evaluate_at(self, precisions: List[int], ad: bool = False):
+        self.child.evaluate_at(precisions[1:], ad)
+        self.interval_bf_operation(precisions[0], ad)
+
+        # Set weight to zero which sets derivatives to 0 for constant intervals
+        if self.child.lower == self.child.upper:
+            self.child.ad_lower_children = [([0, 0], adlc[1]) for adlc in self.child.ad_lower_children]
+            self.child.ad_upper_children = [([0, 0], adlc[1]) for adlc in self.child.ad_upper_children]
+
+    def subtree_size(self):
+        return 1 + self.child.subtree_size()
+
+    def interval_bf_operation(self,
+                              precision_of_result: int,
+                              ad: bool = False) -> 'ExactRealProgram':
+        child = self.child
+        context_down = bf.precision(precision_of_result) + bf.RoundTowardNegative
+        context_up = bf.precision(precision_of_result) + bf.RoundTowardPositive
+        self.lower = self.unary_op(child.lower, context_down)
+        self.upper = self.unary_op(child.upper, context_up)
+
+        if ad:
+            child.ad_lower_children.append(((self.unary_deriv(child.lower), 0), self))
+            child.ad_upper_children.append(((0, self.unary_deriv(child.upper)), self))
+
+
 class ExactLeaf(ExactRealProgram):
 
     def interval_bf_operation(self,
@@ -336,7 +391,7 @@ class ExactLeaf(ExactRealProgram):
     def full_string(self, level=0):
         value = str([round(float(self.lower), 2), round(float(self.upper), 2)])
         if self.lower_grad is not None and self.upper_grad is not None:
-            derivatives = str([round(self.lower_grad, 2), round(self.upper_grad, 2)])
+            derivatives = str([round(float(self.lower_grad), 2), round(float(self.upper_grad), 2)])
         else:
             derivatives = "[None, None]"
         return colored("\t"*level + value + derivatives + "\n", self.color)

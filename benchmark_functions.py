@@ -1,11 +1,14 @@
 # Each of the benchmarks from https://github.com/soarlab/FPTuner/tree/master/examples/primitives
 from typing import List
+import bigfloat as bf
+
+from exact_real_program import UnaryOperator
 
 
 def simplest_test(params: List):
-    big_const, e, pi = params
+    big_const, e, euler, pi = params
+    # return UnaryOperator(UnaryOperator(UnaryOperator(UnaryOperator(UnaryOperator(UnaryOperator(e, bf.exp, bf.exp), bf.log, bf.log), bf.exp, bf.exp), bf.log, bf.log), bf.exp, bf.exp), bf.log, bf.log) + big_const * pi
     return e + big_const * pi
-
 
 # var_T = IR.RealVE("T", 0, float(300.0)-float(0.01), float(300.0)+float(0.01))
 # var_a = IR.RealVE("a", 1, float(0.401)-float(1e-06), float(0.401)+float(1e-06))

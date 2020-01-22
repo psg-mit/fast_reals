@@ -6,6 +6,7 @@ import pickle
 import numpy as np
 import os
 import re
+import bigfloat as bf
 from tap import Tap
 
 from evaluate import evaluate, evaluate_using_derivatives
@@ -25,9 +26,12 @@ def run_benchmarks(names: Iterable = None, filename: str = '', use_ad=False):
         print(name)
         benchmark = all_benchmarks[name]
         exact_program, variables = benchmark.benchmark(), benchmark.variables
-        init_prec = 10
+        init_prec = 50
         num_samples = 1
-        error_bounds: List[float] = [, , , , ]
+        error_bounds: List = [bf.BigFloat('0.' + '0' * 50000 + '1'),
+                              bf.BigFloat('0.' + '0' * 100000 + '1'),
+                              bf.BigFloat('0.' + '0' * 150000 + '1'),]
+                            #   bf.BigFloat('0.' + '0' * 10000 + '1'),]
         refinements, times = [], []
         for error_bound in error_bounds:
             sample_refinements, sample_times = [], []
@@ -60,7 +64,7 @@ def run_benchmarks(names: Iterable = None, filename: str = '', use_ad=False):
             filename += ad
         filename += '.pkl'
         with open(filename, 'wb') as f:
-            pickle.dump((name_data, error_bounds), f)
+            pickle.dump((name_data, [float(bf.log10(error_bound)) for error_bound in error_bounds]), f)
 
         print('Wrote file', filename, '\n')
     return filename
@@ -68,15 +72,15 @@ def run_benchmarks(names: Iterable = None, filename: str = '', use_ad=False):
 
 def load_results(filename: str):
     with open(filename, 'rb') as f:
-        name_data, error_bounds = pickle.load(f)
+        name_data, log_error_bounds = pickle.load(f)
     if len(re.findall("_version", filename)) > 0:
         ad_filename = filename.strip(".pkl") + "_ad" + ".pkl"
     else:
         ad_filename = filename.strip(".pkl") + "_ad" + ".pkl"
     with open(ad_filename, 'rb') as f:
-        ad_name_data, ad_error_bounds = pickle.load(f)
+        ad_name_data, ad_log_error_bounds = pickle.load(f)
     fig, axs = plt.subplots(3, 5)
-    fig.suptitle('Log Derivative', fontsize=26)
+    fig.suptitle('Derivative', fontsize=26)
     times, refinements = [], []
     for k, (name, data) in enumerate(name_data.items()):
         base_counts, ad_counts = data['refinements'], ad_name_data[name]['refinements']
@@ -84,8 +88,8 @@ def load_results(filename: str):
         base_seconds = [time.total_seconds() for time in base_times]
         ad_seconds = [time.total_seconds() for time in ad_times]
         i, j = k % 3, k % 5
-        axs[i, j].plot(np.log(error_bounds), base_seconds, 'b--')
-        axs[i, j].plot(np.log(error_bounds), ad_seconds, 'r')
+        axs[i, j].plot(log_error_bounds, base_seconds, 'b--')
+        axs[i, j].plot(log_error_bounds, ad_seconds, 'r')
         axs[i, j].legend(('Base', 'With derivatives'), loc='upper right')
         axs[i, j].set()
         axs[i, j].set_title(name, fontsize=18)
@@ -99,6 +103,9 @@ def load_results(filename: str):
 
         times.append(np.mean([(bas - ads) / bas * 100 for bas, ads in zip(base_seconds, ad_seconds)]))
         refinements.append(np.mean([(bas - ads) / bas * 100 for bas, ads in zip(base_counts, ad_counts)]))
+    plot_filename = filename + '_plot' + '.png'
+    plt.savefig(plot_filename)
+    print('Wrote file', plot_filename)
     plt.show()
 
     # # print("time", round(np.mean(times), 2))
@@ -109,13 +116,16 @@ class ArgumentParser(Tap):
     filename: str
     use_ad: bool = False
     load_results: bool = False
-
+    run: bool = True
 
 if __name__ == '__main__':
     np.random.seed(0)
 
     args = ArgumentParser().parse_args()
-    filename = run_benchmarks(['simplest test'], args.filename, args.use_ad)
+    if args.run:
+        filename = run_benchmarks(['simplest test'], args.filename, args.use_ad)
+    else:
+        filename = args.filename + '.pkl'
 
     if args.load_results:
         load_results(filename)
