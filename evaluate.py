@@ -19,26 +19,28 @@ def evaluate(program: ExactRealProgram,
     program.evaluate(precision, ad)
 
     # max precision setting rounding up of the log bound
-    error_precision = 1 + int(bf.abs(bf.log2(precision_bound)))
+    # error_precision = 1 + int(bf.abs(bf.log2(precision_bound)))
+    error_precision = 10000
+    # print("The error precision is", error_precision)
     context = bf.precision(error_precision) + bf.RoundTowardPositive
     program.grad_precision = 100  # error_precision
 
     error = bf.sub(program.upper, program.lower, context)
-    refinement_steps = 1
+    refinement_steps = 0
 
-    iteration_times = []
+    # iteration_times = []
     while error > precision_bound:
         print(precision)
+        print()
         program.apply(reset_ad_children)
-        start_time = timer()
+        # start_time = timer()
         program.evaluate(precision, ad)
-        end_time = timer()
+        # end_time = timer()
         error = bf.sub(program.upper, program.lower, context)
-        iteration_times.append(timedelta(seconds=end_time - start_time))
-        # precision = precision + 3
-        precision = int(50 * 1.25**(refinement_steps))
+        # iteration_times.append(timedelta(seconds=end_time - start_time))
+        precision += int(50 * 1.25**(refinement_steps))
         refinement_steps += 1
-    return refinement_steps, iteration_times
+    return refinement_steps, precision  # iteration_times
 
 
 def reset_ad_children(program: ExactRealProgram):
@@ -65,7 +67,9 @@ def evaluate_using_derivatives(program: ExactRealProgram,
     critical_path = set()
     refinement_steps = 0
     while error > precision_bound:
+        # print("The error is", error)
         print(precisions)
+        print()
         grads = []
         program.apply(lambda program: grads.append(program.grad()))
         precisions, critical_path = precision_from_grads(program, precisions, grads, refinement_steps)
@@ -77,8 +81,9 @@ def evaluate_using_derivatives(program: ExactRealProgram,
         error = bf.sub(program.upper, program.lower, context)
         iteration_times.append(timedelta(seconds=end_time - start_time))
         refinement_steps += 1
+    print(precisions)
     program.apply(reset_ad_children)
-    return refinement_steps #, iteration_times, all_precisions
+    return refinement_steps, precisions
 
 
 def precision_from_grads(program: ExactRealProgram,
@@ -90,11 +95,10 @@ def precision_from_grads(program: ExactRealProgram,
             # for i, prec in enumerate(prev_precisions)]
     #int(50 * 1.25**t + 50 * 1.25**(t + 1))
     # print(grads)
-    # print(critical_path)
-    precs = [int(50 * 1.25**(t+1)) if i in critical_path else int(50 * 1.25**t)
+    precs = [prec + int(50 * 1.33**t) if i in critical_path else prec + int(50 * 1.25**t)
              for i, prec in enumerate(prev_precisions)]
     # print(critical_path)
-    # print(precs)
+    print(precs)
     # Refine the largest precision by an extra step
     return precs, critical_path
 

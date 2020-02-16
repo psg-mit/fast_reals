@@ -6,6 +6,7 @@ import subprocess
 from tabulate import tabulate
 from datetime import timedelta
 from timeit import default_timer as timer
+from multiprocessing import Process, Pipe
 
 
 def time_wrap(f, args):
@@ -14,6 +15,26 @@ def time_wrap(f, args):
     res = f(*args)
     end_time = timer()
     return timedelta(seconds=end_time - start_time), res
+
+
+def multiprocess(f):
+    """A decorator for executing f in its own_process. """
+
+    def multiprocess_wrap(conn, *args, **kwargs):
+        """Wrap f so that the result of the computation is sent through the connection. """
+        conn.send(f(*args, **kwargs))
+        conn.close()
+
+    def wrapper(*args, **kwargs):
+        """Make the multiprocessed request, passing through the child process."""
+        parent_conn, child_conn = Pipe()
+        p = Process(target=multiprocess_wrap, args=(child_conn, *args))
+        p.start()
+        result = parent_conn.recv()
+        p.join()
+        return result
+
+    return wrapper
 
 
 def cast_input(to_cast):

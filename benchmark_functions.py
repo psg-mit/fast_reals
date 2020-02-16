@@ -3,11 +3,14 @@ from typing import List
 import bigfloat as bf
 
 from exact_real_program import UnaryOperator
+from interval_sin import interval_sin
 
 
 def simplest_test(params: List):
-    big_const, e, euler, pi = params
+    big_const, e, pi = params
     # return UnaryOperator(UnaryOperator(UnaryOperator(UnaryOperator(UnaryOperator(UnaryOperator(e, bf.exp, bf.exp), bf.log, bf.log), bf.exp, bf.exp), bf.log, bf.log), bf.exp, bf.exp), bf.log, bf.log) + big_const * pi
+    # sin(10 * sin(10 * (sin (10 * e))))
+    # return UnaryOperator(10 * UnaryOperator(10 * UnaryOperator(10 * UnaryOperator(10 * UnaryOperator(10 * UnaryOperator(10 * e, interval_sin), interval_sin), interval_sin), interval_sin), interval_sin), interval_sin) /big_const   + big_const * pi
     return e + big_const * pi
 
 # var_T = IR.RealVE("T", 0, float(300.0)-float(0.01), float(300.0)+float(0.01))

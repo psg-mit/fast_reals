@@ -26,11 +26,10 @@ simplest_test = Benchmark(
     benchmark=benchmark_functions.simplest_test,
     distributions=(),
     constants=(
-        10**20,  # big_const
+        bf.exp2(100000, bf.RoundTowardZero + bf.precision(1)),  # big_const
     ),
     exact_constants=(
         lambda context: bf.exp(1, context),  # e
-        bf.const_euler, # euler const
         bf.const_pi,  # pi
     ),
 )

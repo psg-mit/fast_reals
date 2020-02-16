@@ -115,7 +115,7 @@ class ExactRealProgram:
     def interval_bf_operation(self,
                               other: 'ExactRealProgram',
                               precision_of_result: int,
-                              ad: bool = False) -> 'ExactRealProgram':
+                              ad: bool = False):
         raise NotImplementedError
 
     def clone_without_grad(self):
@@ -168,6 +168,7 @@ class ExactAdd(BinOp):
     def interval_bf_operation(self,
                               precision_of_result: int,
                               ad: bool = False):
+        self.precision = precision_of_result
         left, right = self.children
         context_down = bf.precision(precision_of_result) + bf.RoundTowardNegative
         context_up = bf.precision(precision_of_result) + bf.RoundTowardPositive
@@ -191,6 +192,7 @@ class ExactSub(BinOp):
     def interval_bf_operation(self,
                               precision_of_result: int,
                               ad: bool = False):
+        self.precision = precision_of_result
         left, right = self.children
         context_down = bf.precision(precision_of_result) + bf.RoundTowardNegative
         context_up = bf.precision(precision_of_result) + bf.RoundTowardPositive
@@ -214,6 +216,7 @@ class ExactMul(BinOp):
                               precision_of_result: int,
                               ad: bool = False) -> ExactRealProgram:
         left, right = self.children
+        self.precision = precision_of_result
 
         ll, lu, rl, ru = left.lower, left.upper, right.lower, right.upper
         product = ExactMul.multiply(ll, lu, rl, ru, precision_of_result)
@@ -282,6 +285,7 @@ class ExactDiv(BinOp):
                               precision_of_result: int,
                               ad: bool = False):
         left, right = self.children
+        self.precision = precision_of_result
 
         inv_lower, inv_upper, inv_lrw, inv_urw = ExactDiv.invert(right.lower, right.upper, precision_of_result)
         product = ExactMul.multiply(left.lower, left.upper, inv_lower, inv_upper, precision_of_result)
@@ -340,11 +344,10 @@ class ExactDiv(BinOp):
 
 class UnaryOperator(ExactRealProgram):
 
-    def __init__(self, child, unary_op: Callable, unary_deriv: Callable):
+    def __init__(self, child, unary_op: Callable):
         super(UnaryOperator, self).__init__(children=[child])
         self.child = child
         self.unary_op = unary_op
-        self.unary_deriv = unary_deriv
         self.operator_string = str(unary_op)
 
     def evaluate(self, precison: int, ad: bool = False):
@@ -365,16 +368,17 @@ class UnaryOperator(ExactRealProgram):
 
     def interval_bf_operation(self,
                               precision_of_result: int,
-                              ad: bool = False) -> 'ExactRealProgram':
+                              ad: bool = False):
+        self.precision = precision_of_result
         child = self.child
         context_down = bf.precision(precision_of_result) + bf.RoundTowardNegative
         context_up = bf.precision(precision_of_result) + bf.RoundTowardPositive
-        self.lower = self.unary_op(child.lower, context_down)
-        self.upper = self.unary_op(child.upper, context_up)
-
+        interval, deriv = self.unary_op([child.lower, child.upper], context_down, context_up)
+        self.lower, self.upper = interval
+        lower_deriv, upper_deriv = deriv
         if ad:
-            child.ad_lower_children.append(((self.unary_deriv(child.lower), 0), self))
-            child.ad_upper_children.append(((0, self.unary_deriv(child.upper)), self))
+            child.ad_lower_children.append((lower_deriv, self))
+            child.ad_upper_children.append((upper_deriv, self))
 
 
 class ExactLeaf(ExactRealProgram):
@@ -382,7 +386,7 @@ class ExactLeaf(ExactRealProgram):
     def interval_bf_operation(self,
                               other: 'ExactRealProgram',
                               precision_of_result: int,
-                              ad: bool = False) -> 'ExactRealProgram':
+                              ad: bool = False):
         pass
 
     def __str__(self, level=0):
@@ -403,6 +407,7 @@ class ExactLeaf(ExactRealProgram):
         return 1
 
     def evaluate_at(self, precisions: List[int], ad: bool = False):
+        self.precision = precisions[0]
         self.evaluate(precisions[0], ad)
 
 
@@ -426,6 +431,7 @@ class GenericExactConstant(ExactLeaf):
         context_up = bf.precision(precision_of_result) + bf.RoundTowardPositive
         self.lower = self.bf_const(context_down)
         self.upper = self.bf_const(context_up)
+
 
 
 class ExactConstant(ExactLeaf):
