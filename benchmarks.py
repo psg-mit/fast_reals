@@ -1,6 +1,15 @@
 from typing import Iterable, Callable, List
 
-from exact_real_program import ExactVariable, ExactConstant, GenericExactConstant
+from unary_ops import (interval_sqrt,
+                       interval_log,
+                       interval_sin,
+                       interval_cuberoot,
+                       interval_fifthroot,
+                       interval_cos,
+                       interval_atan,
+                       interval_exp,
+                       interval_pow10)
+from exact_real_program import ExactVariable, ExactConstant, GenericExactConstant, UnaryOperator
 import benchmark_functions
 import bigfloat as bf
 
@@ -12,16 +21,19 @@ class Benchmark:
                  benchmark: Callable,
                  distributions: Iterable = [],
                  constants: Iterable[float] = [],
-                 exact_constants: Iterable[Callable] = []):
+                 exact_constants: Iterable[Callable] = [],
+                 unary_ops: Iterable[Callable] = []):
         self.variables: List[ExactVariable] = [ExactVariable(*d) for d in distributions]
         self.constants: List[ExactConstant] = [ExactConstant(c) for c in constants]
         self.exact_constants: List[GenericExactConstant] = [GenericExactConstant(c) for c in exact_constants]
+        self.unary_ops = [(lambda c: (lambda child: UnaryOperator(child, c)))(c) for c in unary_ops]
         self.benchmark_function = benchmark
 
     def benchmark(self):
-        return self.benchmark_function(self.variables + self.constants + self.exact_constants)
+        return self.benchmark_function(self.variables + self.constants + self.exact_constants + self.unary_ops)
 
 
+# Misc benchmarks
 simplest_test = Benchmark(
     benchmark=benchmark_functions.simplest_test,
     distributions=(),
@@ -34,7 +46,147 @@ simplest_test = Benchmark(
     ),
 )
 
+# CCA Benchmarks
+sqrt_pi = Benchmark(
+    benchmark=benchmark_functions.sqrt_pi,
+    exact_constants=(
+        bf.const_pi,  # pi
+    ),
+    unary_ops=(interval_sqrt, ),
+)
 
+log_pi = Benchmark(
+    benchmark=benchmark_functions.log_pi,
+    exact_constants=(
+        bf.const_pi,  # pi
+    ),
+    unary_ops=(interval_log, ),
+)
+
+sin_e = Benchmark(
+    benchmark=benchmark_functions.sin_e,
+    exact_constants=(
+        lambda context: bf.exp(1, context),  # e
+    ),
+    unary_ops=(interval_sin, ),
+)
+
+cos_e = Benchmark(
+    benchmark=benchmark_functions.cos_e,
+    exact_constants=(
+        lambda context: bf.exp(1, context),  # e
+    ),
+    unary_ops=(interval_cos, ),
+)
+
+sin_sin_sin_1 = Benchmark(
+    benchmark=benchmark_functions.sin_sin_sin_1,
+    constants=(1,),
+    unary_ops=(interval_sin, ),
+)
+
+cos_cos_cos_1 = Benchmark(
+    benchmark=benchmark_functions.cos_cos_cos_1,
+    constants=(1,),
+    unary_ops=(interval_cos, ),
+)
+
+e_e_e = Benchmark(
+    benchmark=benchmark_functions.e_e_e,
+    exact_constants=(
+        lambda context: bf.exp(1, context),  # e
+    ),
+    unary_ops=(interval_exp, ),
+)
+
+log_log_log_pi = Benchmark(
+    benchmark=benchmark_functions.log_log_log_pi,
+    exact_constants=(
+        bf.const_pi,  # pi
+    ),
+    unary_ops=(interval_log, ),
+)
+
+log_log_log_e = Benchmark(
+    benchmark=benchmark_functions.log_log_log_e,
+    exact_constants=(
+        lambda context: bf.exp(1, context),  # e
+    ),
+    unary_ops=(interval_log, ),
+)
+
+
+log_log_log_log_pi = Benchmark(
+    benchmark=benchmark_functions.log_log_log_log_pi,
+    exact_constants=(
+        bf.const_pi,  # pi
+    ),
+    unary_ops=(interval_log, ),
+)
+
+log_log_log_log_e = Benchmark(
+    benchmark=benchmark_functions.log_log_log_log_e,
+    exact_constants=(
+        lambda context: bf.exp(1, context),  # e
+    ),
+    unary_ops=(interval_log, ),
+)
+
+
+sin_10_50 = Benchmark(
+    benchmark=benchmark_functions.sin_10_50,
+    constants=(50, ),
+    unary_ops=(interval_sin, interval_pow10, ),
+)
+
+cos_10_50 = Benchmark(
+    benchmark=benchmark_functions.cos_10_50,
+    constants=(50, ),
+    unary_ops=(interval_cos, interval_pow10, ),
+)
+
+
+e_1000 = Benchmark(
+    benchmark=benchmark_functions.e_1000,
+    constants=(1000, ),
+    unary_ops=(interval_exp, ),
+)
+
+arctan_10_50 = Benchmark(
+    benchmark=benchmark_functions.arctan_10_50,
+    constants=(50, ),
+    unary_ops=(interval_atan, interval_pow10, ),
+)
+
+e_pi_sqrt_163 = Benchmark(
+    benchmark=benchmark_functions.e_pi_sqrt_163,
+    constants=(163, ),
+    exact_constants=(
+        bf.const_pi,  # pi
+    ),
+    unary_ops=(interval_exp, interval_sqrt, ),
+)
+
+many_roots = Benchmark(
+    benchmark=benchmark_functions.many_roots,
+    constants=(32, 5, 27, 1, 3, 9, 25),
+    unary_ops=(interval_cuberoot, interval_fifthroot, ),
+)
+
+sin_log_sqrt = Benchmark(
+    benchmark=benchmark_functions.sin_log_sqrt,
+    constants=(3, 640320, 163),
+    unary_ops=(interval_log, interval_sin, interval_sqrt, ),
+)
+
+logistic_map_1000_steps = Benchmark(
+    benchmark=benchmark_functions.logistic_map_1000_steps,
+    exact_constants=(
+        bf.const_pi,  # pi
+    ),
+)
+
+# FPBench benchmarks
 carbon_gas = Benchmark(
     benchmark=benchmark_functions.carbon_gas,
     distributions=(
@@ -205,9 +357,11 @@ verlhulst = Benchmark(
     ),
 )
 
-
-all_benchmarks = {
+jesse_benchmarks = {
     "simplest test": simplest_test,
+}
+
+fpbench_benchmarks = {
     "carbon gas": carbon_gas,
     "doppler1": doppler1,
     "doppler2": doppler2,
@@ -223,4 +377,26 @@ all_benchmarks = {
     "turbine2": turbine2,
     "turbine3": turbine3,
     "verlhulst": verlhulst
+}
+
+cca_benchmarks = {
+    "sqrt_pi": sqrt_pi,
+    "log_pi": log_pi,
+    "sin_e": sin_e,
+    "cos_e": cos_e,
+    "sin_sin_sin_1": sin_sin_sin_1,
+    "cos_cos_cos_1": cos_cos_cos_1,
+    "e_e_e": e_e_e,
+    "log_log_log_pi": log_log_log_pi,
+    "log_log_log_e": log_log_log_e,
+    "log_log_log_log_pi": log_log_log_log_pi,
+    "log_log_log_log_e": log_log_log_log_e,
+    "sin_10_50": sin_10_50,
+    "cos_10_50": cos_10_50,
+    "e_1000": e_1000,
+    "arctan_10_50": arctan_10_50,
+    "e_pi_sqrt_163": e_pi_sqrt_163,
+    "many_roots": many_roots,
+    "sin_log_sqrt": sin_log_sqrt,
+    # "logistic_map_1000_steps": logistic_map_1000_steps,
 }

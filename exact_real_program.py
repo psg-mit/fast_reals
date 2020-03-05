@@ -433,7 +433,6 @@ class GenericExactConstant(ExactLeaf):
         self.upper = self.bf_const(context_up)
 
 
-
 class ExactConstant(ExactLeaf):
     def __init__(self, constant: float):
         context_down = bf.precision(53) + bf.RoundTowardNegative

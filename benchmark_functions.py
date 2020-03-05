@@ -1,17 +1,111 @@
 # Each of the benchmarks from https://github.com/soarlab/FPTuner/tree/master/examples/primitives
 from typing import List
-import bigfloat as bf
-
-from exact_real_program import UnaryOperator
-from interval_sin import interval_sin
 
 
 def simplest_test(params: List):
     big_const, e, pi = params
-    # return UnaryOperator(UnaryOperator(UnaryOperator(UnaryOperator(UnaryOperator(UnaryOperator(e, bf.exp, bf.exp), bf.log, bf.log), bf.exp, bf.exp), bf.log, bf.log), bf.exp, bf.exp), bf.log, bf.log) + big_const * pi
-    # sin(10 * sin(10 * (sin (10 * e))))
-    # return UnaryOperator(10 * UnaryOperator(10 * UnaryOperator(10 * UnaryOperator(10 * UnaryOperator(10 * UnaryOperator(10 * e, interval_sin), interval_sin), interval_sin), interval_sin), interval_sin), interval_sin) /big_const   + big_const * pi
     return e + big_const * pi
+
+
+def sqrt_pi(params: List):
+    pi, sqrt = params
+    return sqrt(pi)
+
+
+def log_pi(params: List):
+    pi, log = params
+    return log(pi)
+
+
+def sin_e(params: List):
+    e, sin = params
+    return sin(e)
+
+
+def cos_e(params: List):
+    e, cos = params
+    return cos(e)
+
+
+def sin_sin_sin_1(params: List):
+    one, sin = params
+    return sin(sin(sin(one)))
+
+
+def cos_cos_cos_1(params: List):
+    one, cos = params
+    return cos(cos(cos(one)))
+
+
+def e_e_e(params: List):
+    e, exp = params
+    return exp(exp(e))
+
+
+def log_log_log_pi(params: List):
+    pi, log = params
+    return log(1 + log(1 + log(1 + pi)))
+
+
+def log_log_log_e(params: List):
+    e, log = params
+    return log(1 + log(1 + log(1 + e)))
+
+
+def log_log_log_log_pi(params: List):
+    pi, log = params
+    return log(1 + log(1 + log(1 + log(1 + pi))))
+
+
+def log_log_log_log_e(params: List):
+    e, log = params
+    return log(1 + log(1 + log(1 + log(1 + e))))
+
+
+def sin_10_50(params: List):
+    fifty, sin, pow10 = params
+    return sin(pow10(fifty))
+
+
+def cos_10_50(params: List):
+    fifty, cos, pow10 = params
+    return cos(pow10(fifty))
+
+
+def e_1000(params: List):
+    thousand, exp = params
+    return exp(thousand)
+
+
+def arctan_10_50(params: List):
+    fifty, arctan, pow10 = params
+    return arctan(pow10(fifty))
+
+
+def e_pi_sqrt_163(params: List):
+    one63, pi, exp, sqrt = params
+    return exp(pi * sqrt(one63))
+
+
+def many_roots(params: List):
+    thirty2, five, twenty7, one, three, nine, twenty5, cube_root, fifth_root = params
+    left = cube_root(fifth_root(thirty2/five) - fifth_root(twenty7/five))
+    right = (one + fifth_root(three) - fifth_root(nine)) / fifth_root(twenty5)
+    return left - right
+
+
+def sin_log_sqrt(params: List):
+    three, six40320, one63, log, sin, sqrt = params
+    return sin((three * log(six40320)) / sqrt(one63))
+
+
+def logistic_map_1000_steps(params: List):
+    pi = params[0]
+    xn = 1 / pi
+    for _ in range(3):  # Should be 1000, but crashes.
+        xn = (15 / 4) * (xn - xn * xn)
+    return xn
+
 
 # var_T = IR.RealVE("T", 0, float(300.0)-float(0.01), float(300.0)+float(0.01))
 # var_a = IR.RealVE("a", 1, float(0.401)-float(1e-06), float(0.401)+float(1e-06))

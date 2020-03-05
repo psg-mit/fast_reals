@@ -28,7 +28,7 @@ def multiprocess(f):
     def wrapper(*args, **kwargs):
         """Make the multiprocessed request, passing through the child process."""
         parent_conn, child_conn = Pipe()
-        p = Process(target=multiprocess_wrap, args=(child_conn, *args))
+        p = Process(target=multiprocess_wrap, args=(child_conn, *args), kwargs=kwargs)
         p.start()
         result = parent_conn.recv()
         p.join()
