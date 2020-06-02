@@ -11,7 +11,7 @@ from benchmarks import fpbench_benchmarks, cca_benchmarks, jesse_benchmarks, Ben
 from utils import time_wrap, multiprocess
 
 
-# @multiprocess
+@multiprocess
 def run_benchmark(log_error_bound: int,
                   benchmark: Benchmark,
                   configuration_increment: Optional[Callable] = None,
@@ -35,7 +35,6 @@ def run_benchmark(log_error_bound: int,
         "log_error_bound": float(log_error_bound),
         "last_prec_config": precision_configuration,
         }
-    # print(exact_program.full_string())
     return data
 
 
@@ -91,32 +90,23 @@ def plot_results(results):
 
 
 if __name__ == '__main__':
-    # import pickle
+    import pickle
 
-    # def run():
-    #     np.random.seed(0)
+    def run():
+        np.random.seed(0)
 
-    #     benchmarks_name = None
-    #     log10_error_bounds: List[int] = [-5000,
-    #                                      -10000,
-    #                                      -15000,
-    #                                      -20000]
-    #     results = run_benchmarks(log10_error_bounds, cca_benchmarks, benchmarks_name)
+        benchmarks_name = None
+        log10_error_bounds: List[int] = [-5000,
+                                         -10000,
+                                         -15000,
+                                         -20000]
+        results = run_benchmarks(log10_error_bounds, cca_benchmarks, benchmarks_name)
 
-    #     pickle.dump(results, open("cca_test.p", "wb"))
+        pickle.dump(results, open("cca_test.p", "wb"))
 
-    # def load():
-    #     results = pickle.load(open("cca_test.p", "rb"))
-    #     plot_results(results)
+    def load():
+        results = pickle.load(open("cca_test.p", "rb"))
+        plot_results(results)
 
-    # run()
-    # load()
-    log_error_bound = -250
-    benchmark = jesse_benchmarks["simplest test"] 
-    run_benchmark(log_error_bound, benchmark, None, use_ad=True)
-
-
-    # for a, b in zip(list(x.keys())[::2], list(x.keys())[1::2]):
-    #     print(f"{a[:-3]} {round((x[b][0]['time'] / x[a][0]['time'] - 1) * 100, 3)}")
-    # for k in x.keys():
-    #     print(k, x[k][0])
+    run()
+    load()
