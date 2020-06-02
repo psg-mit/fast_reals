@@ -20,21 +20,21 @@ def interval_sin(interval, context_down, context_up):
 
         # Check derivative signs to identify what monotonic region lower and upper lie in
         # set the output intervals as appropriate.
-        if not (lower_deriv_down < 0) and not (upper_deriv_down < 0):
+        if (lower_deriv_down >= 0) and (upper_deriv_down >= 0):
             out_interval = sin_monotone_i(interval)
             derivs = [lower_deriv_down, 0], [0, upper_deriv_up]
-        elif not (lower_deriv_up > 0) and not (upper_deriv_up > 0):
+        elif (lower_deriv_up <= 0) and (upper_deriv_up <= 0):
             out_interval = sin_monotone_i([interval[1], interval[0]])
             derivs = [0, lower_deriv_up], [upper_deriv_down, 0]
-        elif not (lower_deriv_down < 0) and not (upper_deriv_up > 0):
+        elif (lower_deriv_down >= 0) and (upper_deriv_up <= 0):
             out_interval = [min(bf.sin(lower, context_down), bf.sin(upper, context_down)), 1]
             if bf.sin(lower, context_down) < bf.sin(upper, context_down):
                 derivs[0] = [lower_deriv_down, 0]
             else:
                 derivs[1] = [upper_deriv_down, 0]
-        elif not (lower_deriv_down > 0) and not (upper_deriv_down < 0):
+        elif (lower_deriv_up <= 0) and (upper_deriv_down >= 0):
             out_interval = [-1, max(bf.sin(lower, context_up), bf.sin(upper, context_up))]
-            if bf.sin(lower, context_down) > bf.sin(upper, context_down):
+            if bf.sin(lower, context_up) > bf.sin(upper, context_up):
                 derivs[0] = [0, lower_deriv_up]
             else:
                 derivs[1] = [0, upper_deriv_up]
@@ -61,19 +61,19 @@ def interval_cos(interval, context_down, context_up):
 
         # Check derivative signs to identify what monotonic region lower and upper lie in
         # set the output intervals as appropriate.
-        if not (lower_deriv_down < 0) and not (upper_deriv_down < 0):
+        if (lower_deriv_down >= 0) and (upper_deriv_down >= 0):
             out_interval = cos_monotone_i(interval)
             derivs = [lower_deriv_down, 0], [0, upper_deriv_up]
-        elif not (lower_deriv_up > 0) and not (upper_deriv_up > 0):
+        elif (lower_deriv_up <= 0) and (upper_deriv_up <= 0):
             out_interval = cos_monotone_i([interval[1], interval[0]])
             derivs = [0, lower_deriv_up], [upper_deriv_down, 0]
-        elif not (lower_deriv_down < 0) and not (upper_deriv_up > 0):
+        elif (lower_deriv_down >= 0) and (upper_deriv_up >= 0):
             out_interval = [min(bf.cos(lower, context_down), bf.cos(upper, context_down)), 1]
             if bf.cos(lower, context_down) < bf.cos(upper, context_down):
                 derivs[0] = [lower_deriv_down, 0]
             else:
                 derivs[1] = [upper_deriv_down, 0]
-        elif not (lower_deriv_down > 0) and not (upper_deriv_down < 0):
+        elif (lower_deriv_up <= 0) and (upper_deriv_down >= 0):
             out_interval = [-1, max(bf.cos(lower, context_up), bf.cos(upper, context_up))]
             if bf.cos(lower, context_down) > bf.cos(upper, context_down):
                 derivs[0] = [0, lower_deriv_up]

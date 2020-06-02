@@ -11,23 +11,23 @@ from benchmarks import fpbench_benchmarks, cca_benchmarks, jesse_benchmarks, Ben
 from utils import time_wrap, multiprocess
 
 
-@multiprocess
+# @multiprocess
 def run_benchmark(log_error_bound: int,
                   benchmark: Benchmark,
-                  configuaration_increment: Optional[Callable] = None,
+                  configuration_increment: Optional[Callable] = None,
                   use_ad: bool = False):
     exact_program, variables = benchmark.benchmark(), benchmark.variables
     init_prec = 50
 
     context = bf.RoundTowardZero + bf.precision(100000)
-    assert log_error_bound < 0
+    assert log_error_bound < 0, "Log error bound should be negative!"
     error_bound = bf.BigFloat(f'0.{"0"*(-log_error_bound-1)}1', context)
     [var.sample() for var in variables]
     if use_ad:
         params = [exact_program, error_bound, [init_prec]*exact_program.subtree_size()]
         time, (num_refinements, precision_configuration) = time_wrap(evaluate_using_derivatives, params)
     else:
-        params = [exact_program, error_bound, configuaration_increment, True, init_prec]
+        params = [exact_program, error_bound, configuration_increment, True, init_prec]
         time, (num_refinements, precision_configuration) = time_wrap(evaluate, params)
     data = {
         "time": time.total_seconds(),
@@ -91,26 +91,30 @@ def plot_results(results):
 
 
 if __name__ == '__main__':
-    import pickle
+    # import pickle
 
-    def run():
-        np.random.seed(0)
+    # def run():
+    #     np.random.seed(0)
 
-        benchmarks_name = None
-        log10_error_bounds: List[int] = [-5000,
-                                         -10000,
-                                         -15000,
-                                         -20000]
-        results = run_benchmarks(log10_error_bounds, cca_benchmarks, benchmarks_name)
+    #     benchmarks_name = None
+    #     log10_error_bounds: List[int] = [-5000,
+    #                                      -10000,
+    #                                      -15000,
+    #                                      -20000]
+    #     results = run_benchmarks(log10_error_bounds, cca_benchmarks, benchmarks_name)
 
-        pickle.dump(results, open("cca_test.p", "wb"))
+    #     pickle.dump(results, open("cca_test.p", "wb"))
 
-    def load():
-        results = pickle.load(open("cca_test.p", "rb"))
-        plot_results(results)
+    # def load():
+    #     results = pickle.load(open("cca_test.p", "rb"))
+    #     plot_results(results)
 
-    run()
-    load()
+    # run()
+    # load()
+    log_error_bound = -250
+    benchmark = jesse_benchmarks["simplest test"] 
+    run_benchmark(log_error_bound, benchmark, None, use_ad=True)
+
 
     # for a, b in zip(list(x.keys())[::2], list(x.keys())[1::2]):
     #     print(f"{a[:-3]} {round((x[b][0]['time'] / x[a][0]['time'] - 1) * 100, 3)}")

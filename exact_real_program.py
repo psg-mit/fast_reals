@@ -112,6 +112,10 @@ class ExactRealProgram:
     def __rtruediv__(self, other: 'ExactRealProgram'):
         return cast_input(other) / self
 
+    def __iter__(self):
+        yield self
+        yield from (node for child in self.children for node in child)
+
     def interval_bf_operation(self,
                               other: 'ExactRealProgram',
                               precision_of_result: int,
@@ -135,11 +139,11 @@ class ExactRealProgram:
 
 class BinOp(ExactRealProgram):
 
-    def evaluate(self, precison: int, ad: bool = False):
+    def evaluate(self, precision: int, ad: bool = False):
         left, right = self.children
-        left.evaluate(precison, ad)
-        right.evaluate(precison, ad)
-        self.interval_bf_operation(precison, ad)
+        left.evaluate(precision, ad)
+        right.evaluate(precision, ad)
+        self.interval_bf_operation(precision, ad)
 
     def evaluate_at(self, precisions: List[int], ad: bool = False):
         left, right = self.children
@@ -240,7 +244,7 @@ class ExactMul(BinOp):
         context_down = bf.precision(precision_of_result) + bf.RoundTowardNegative
         context_up = bf.precision(precision_of_result) + bf.RoundTowardPositive
 
-        # Note: super inefficient to compute all pairs, kaucher multiplication in future?
+        # Note: inefficient to compute all pairs, Kaucher multiplication in future?
         ll_down = bf.mul(left_lower, right_lower, context_down), (left_lower, 0), (right_lower, 0)
         lu_down = bf.mul(left_lower, right_upper, context_down), (left_lower, 0), (right_upper, 1)
         ul_down = bf.mul(left_upper, right_lower, context_down), (left_upper, 1), (right_lower, 0)
@@ -410,6 +414,9 @@ class ExactLeaf(ExactRealProgram):
         self.precision = precisions[0]
         self.evaluate(precisions[0], ad)
 
+    def __iter__(self):
+        yield self
+
 
 class ExactInterval(ExactLeaf):
 
@@ -419,6 +426,8 @@ class ExactInterval(ExactLeaf):
     def evaluate(self, precision_of_result: int, ad: bool = False):
         pass
 
+    def __iter__(self):
+        yield from ()
 
 class GenericExactConstant(ExactLeaf):
 
@@ -448,6 +457,8 @@ class ExactConstant(ExactLeaf):
             return colored("\t"*level + str(round(float(self.lower), 2)) + "\n", self.color)
         return super().full_string(level)
 
+    # def __iter__(self):
+    #     yield from ()
 
 class ExactVariable(ExactLeaf):
 
